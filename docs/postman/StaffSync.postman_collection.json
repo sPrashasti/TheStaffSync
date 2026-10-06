@@ -1,0 +1,98 @@
+{
+  "info": {
+    "name": "StaffSync API",
+    "description": "StaffSync HRMS REST API. Import together with StaffSync.postman_environment.json and select the 'StaffSync Local' environment. Each request has automated tests (see the Tests tab / Test Results).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00 Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('success is true', () => pm.expect(body.success).to.eql(true));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql('StaffSync API is running'));",
+                  "pm.test('database state reported', () => pm.expect(body.data.database).to.be.oneOf(['connected', 'connecting', 'disconnected', 'disconnecting']));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown route returns JSON 404",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/does-not-exist"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "const body = pm.response.json();",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message names the route', () => pm.expect(body.message).to.include('/api/does-not-exist'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Malformed JSON returns 400",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{bad json" },
+            "url": "{{baseUrl}}/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('message explains the problem', () => pm.expect(pm.response.json().message).to.eql('Request body contains invalid JSON'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Disallowed CORS origin returns 403",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Origin", "value": "http://evil.example.com" }],
+            "url": "{{baseUrl}}/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('success is false', () => pm.expect(pm.response.json().success).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
