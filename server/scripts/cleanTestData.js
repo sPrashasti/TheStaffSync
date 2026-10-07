@@ -22,12 +22,14 @@ const run = async () => {
   const userIds = await User.find({ email: TEST_EMAIL }).distinct('_id');
   const employeeIds = await Employee.find({ userId: { $in: userIds } }).distinct('_id');
   const byEmployee = { employeeId: { $in: employeeIds } };
+  const leaveIds = await Leave.find(byEmployee).distinct('_id');
 
   // Every collection that can hold rows for a test account. Add new modules here.
   const targets = [
     ['attendance records', Attendance, byEmployee],
     ['leave requests', Leave, byEmployee],
-    ['notifications', Notification, { recipient: { $in: userIds } }],
+    // Their own notifications, and other people's that point at their leave (e.g. a manager's "New leave request").
+    ['notifications', Notification, { $or: [{ recipient: { $in: userIds } }, { 'relatedEntity.entityId': { $in: leaveIds } }] }],
     ['employee profiles', Employee, { _id: { $in: employeeIds } }],
     ['user accounts', User, { _id: { $in: userIds } }],
   ];

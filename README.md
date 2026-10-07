@@ -19,8 +19,9 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | 8 | Leave management (apply, approve, reject) | ✅ Complete |
 | 9 | Role dashboards and HR reports | ✅ Complete |
 | 10 | Announcements and training | ✅ Complete |
-| 11 | Notifications | ⏳ Next |
-| 12–13 | Frontend integration + dashboards | Planned |
+| 11 | Notifications | ✅ Complete |
+| 12 | Frontend foundation: auth pages, session, protected routes, layout | ⏳ Next |
+| 13 | Role dashboards and pages using the real API | Planned |
 | 14–18 | Testing, security hardening, optimisation, deployment | Planned |
 
 ## Tech stack
@@ -139,7 +140,7 @@ npm run dev
 # → CORS allowed origins: http://localhost:5173
 # → Default time zone: Asia/Kolkata
 # → Working days: Mon, Tue, Wed, Thu, Fri
-# → Mounted routes: /api/health, /api/auth, /api/employees, /api/attendance, /api/leaves, /api/dashboard, /api/reports, /api/announcements, /api/trainings
+# → Mounted routes: /api/health, /api/auth, /api/employees, /api/attendance, /api/leaves, /api/dashboard, /api/reports, /api/announcements, /api/trainings, /api/notifications
 
 # Terminal 2 — frontend
 cd client
@@ -297,6 +298,9 @@ const getExample = async (req, res) => {
 | DELETE | `/api/trainings/:id` | Yes | hr, the manager who created it | 200 | 400, 401, 403, 404, 409 |
 | POST | `/api/trainings/:id/enroll` | Yes | employee, manager | 200 | 400, 401, 403, 404, 409 |
 | DELETE | `/api/trainings/:id/enroll` | Yes | employee, manager | 200 | 400, 401, 403, 404, 409 |
+| GET | `/api/notifications` | Yes | any (own only) | 200 | 400, 401 |
+| PUT | `/api/notifications/:id/read` | Yes | owner | 200 | 400, 401, 404 |
+| PUT | `/api/notifications/read-all` | Yes | owner | 200 | 401 |
 
 More endpoints are added and documented phase by phase; the full planned list is in [docs/PHASE-0-REQUIREMENTS.md](docs/PHASE-0-REQUIREMENTS.md#5-api-endpoint-list).
 
@@ -685,6 +689,28 @@ Enrolment is a single atomic update that checks seats, duplicates and dates toge
 
 `GET /api/trainings` is paginated, soonest first, and accepts `?status=upcoming|ongoing|completed` and `?enrolled=true` (only trainings you are enrolled in). Training dates are judged in the company default time zone.
 
+### Notifications
+
+Notifications are created automatically by other modules and stored in MongoDB:
+
+| Event | Recipients | Title |
+|---|---|---|
+| Leave requested | The applicant's manager; if they have none, or the manager is deactivated, every active HR user | `New leave request` |
+| Leave approved / rejected | The applicant (rejections include the reason) | `Leave approved` / `Leave rejected` |
+| Announcement published | Every active user in its audience, except the author | `New announcement` |
+| Training title, trainer or dates changed | Everyone enrolled | `Training updated` |
+| Training deleted | Everyone enrolled | `Training cancelled` |
+
+- Each notification has `type` (`leave`, `announcement`, `training`), `title`, `message`, `isRead`, `createdAt`, and `relatedEntity: { entityType, entityId }` so the frontend can link to the item.
+- Deleting an announcement or training also deletes the notifications that point at it, so no link leads nowhere.
+- **Notifications never block the action.** If writing them fails, the error is logged and the leave decision, announcement or training change still succeeds.
+
+| Endpoint | Behaviour |
+|---|---|
+| `GET /api/notifications` | Your own, newest first, paginated. `?isRead=true|false` filters. `data.unreadCount` is always your total unread, for a badge |
+| `PUT /api/notifications/:id/read` | Marks one read. Someone else's gives **404** `Notification not found` |
+| `PUT /api/notifications/read-all` | Marks all yours read; `data.updated` says how many |
+
 ## CORS configuration
 
 The API only accepts browser requests from origins listed in `CLIENT_URL`.
@@ -704,7 +730,7 @@ Symptom of a CORS misconfiguration: the request works in Postman but the browser
 3. Click the environment's eye icon and fill in **hrPassword** and **managerPassword**. These are `SEED_HR_PASSWORD` and `SEED_DEMO_PASSWORD` from `server/.env`. Run `npm run seed:demo` first if you haven't. The passwords stay in your local Postman only; the committed environment file leaves them blank.
 4. Open the collection, choose **Run collection**, and run it with the backend started.
 
-Every request carries automated assertions. Expected result: **159 requests, 395 assertions, 0 failures**.
+Every request carries automated assertions. Expected result: **169 requests, 417 assertions, 0 failures**.
 
 **00 Health**
 
@@ -731,7 +757,7 @@ Every request carries automated assertions. Expected result: **159 requests, 395
 | Get current user | 200, user and `Unassigned` employee profile |
 | Get current user without token / invalid token / wrong scheme | 401 |
 
-Each run creates a few `postman+…@staffsync.test` accounts so the collection can be re-run. To remove them and everything linked to them (attendance, leave, notifications), run:
+Each run creates a few `postman+…@staffsync.test` accounts so the collection can be re-run. To remove them and everything linked to them (attendance, leave, their notifications, and other people's notifications about their leave), run:
 
 ```bash
 cd server
@@ -842,6 +868,16 @@ It only touches `postman+…@staffsync.test` accounts and refuses to run when `N
 | Training summary report shows 1 of 2 seats (50%); manager opens report | 200 / 403 |
 | Creator deletes; training then returns | 200 / 404 |
 
+**08 Notifications** (checks what folders 05 and 07 generated in the same run)
+
+| Request | Expected |
+|---|---|
+| Applicant's notifications | `Leave approved`, `Leave rejected` with the reason, `Training cancelled`; unread count |
+| Manager's notifications | `New leave request` for the team member; none left for the deleted announcement |
+| Another user marks it read / owner marks it read | 404 / 200 |
+| Unread filter; mark all read; unread count afterwards | excludes it / count / 0 |
+| Invalid filter / no token | 400 / 401 |
+
 From the command line (no Postman install needed):
 
 ```bash
@@ -880,7 +916,7 @@ npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/St
 - Check-in and check-out must fall on the same calendar day.
 - Leave counts calendar days (weekends and public holidays included), and there are no leave balances or allowances yet.
 - Employees cannot cancel a leave request yet.
-- No notifications are sent for leave decisions yet (Phase 11).
+- Notifications are in-app only (no email), and old ones are never deleted automatically.
 - No rate limiting on login yet (security hardening, Phase 15).
 - No logout endpoint: tokens are stateless, so the client logs out by discarding the token. Deactivating a user blocks their tokens immediately.
 - The frontend is a single connection-check page; routing and role dashboards arrive in Phases 12–13.

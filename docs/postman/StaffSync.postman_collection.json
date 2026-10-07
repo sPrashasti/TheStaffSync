@@ -4726,6 +4726,271 @@
           }
         }
       ]
+    },
+    {
+      "name": "08 Notifications",
+      "item": [
+        {
+          "name": "Applicant notified of decisions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const approved = body.data.items.filter((n) => n.relatedEntity && n.relatedEntity.entityId === pm.environment.get('leaveId'));",
+                  "const rejected = body.data.items.filter((n) => n.relatedEntity && n.relatedEntity.entityId === pm.environment.get('leave2Id'));",
+                  "pm.test('approval notification', () => pm.expect(approved.map((n) => n.title)).to.include('Leave approved'));",
+                  "pm.test('rejection notification with reason', () => { const n = rejected.find((x) => x.title === 'Leave rejected'); pm.expect(n.message).to.include('Release week'); });",
+                  "pm.test('cancelled training notification', () => pm.expect(body.data.items.map((n) => n.title)).to.include('Training cancelled'));",
+                  "pm.test('unreadCount reported', () => pm.expect(body.data.unreadCount).to.be.at.least(3));",
+                  "pm.environment.set('notificationId', approved[0]._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/notifications?limit=50"
+          }
+        },
+        {
+          "name": "Manager notified of the leave request",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('new leave request for the team member', () => pm.expect(body.data.items.filter((n) => n.relatedEntity && n.relatedEntity.entityId === pm.environment.get('leaveId')).map((n) => n.title)).to.include('New leave request'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/notifications?limit=100"
+          }
+        },
+        {
+          "name": "Deleted announcement left no notification",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('no notification points at it', () => pm.expect(body.data.items.filter((n) => n.relatedEntity && n.relatedEntity.entityId === pm.environment.get('announcementId'))).to.have.length(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/notifications?limit=100"
+          }
+        },
+        {
+          "name": "Someone else cannot mark it read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql('Notification not found'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/notifications/{{notificationId}}/read"
+          }
+        },
+        {
+          "name": "Mark one read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('is read', () => pm.expect(body.data.isRead).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/notifications/{{notificationId}}/read"
+          }
+        },
+        {
+          "name": "Unread filter excludes it",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('not in unread list', () => pm.expect(body.data.items.map((n) => n._id)).to.not.include(pm.environment.get('notificationId')));",
+                  "pm.test('all items unread', () => body.data.items.forEach((n) => pm.expect(n.isRead).to.eql(false)));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/notifications?isRead=false&limit=100"
+          }
+        },
+        {
+          "name": "Mark all read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('reports count', () => pm.expect(body.data.updated).to.be.at.least(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/notifications/read-all"
+          }
+        },
+        {
+          "name": "Nothing unread afterwards",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('unreadCount is 0', () => pm.expect(body.data.unreadCount).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/notifications"
+          }
+        },
+        {
+          "name": "Invalid isRead filter returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/notifications?isRead=maybe"
+          }
+        },
+        {
+          "name": "Notifications without token return 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/notifications"
+          }
+        }
+      ]
     }
   ],
   "variable": [

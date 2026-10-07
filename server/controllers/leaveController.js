@@ -5,6 +5,7 @@ const AppError = require('../utils/AppError');
 const { sendSuccess, sendCreated } = require('../utils/apiResponse');
 const { getPagination, buildPage } = require('../utils/pagination');
 const { toDateString, addDays, dateStringToDate, employeeTimeZone } = require('../utils/dates');
+const notifications = require('../services/notificationService');
 
 // Longest single request, in calendar days including both ends.
 const MAX_LEAVE_DAYS = 60;
@@ -71,6 +72,7 @@ const decide = async (req, res, status, extra = {}) => {
     const current = await Leave.findById(leave._id).select('status');
     throw new AppError(`This leave request has already been ${current.status}`, 409);
   }
+  await notifications.leaveDecided({ leave: updated, applicant, deciderName: req.user.name });
 
   await updated.populate([withEmployee, withApprover]);
   sendSuccess(res, { message: status === 'approved' ? 'Leave approved' : 'Leave rejected', data: updated });
@@ -123,6 +125,7 @@ const applyLeave = async (req, res) => {
     );
   });
 
+  await notifications.leaveRequested({ leave, applicant: req.employee, applicantName: req.user.name });
   sendCreated(res, { message: 'Leave request submitted', data: leave });
 };
 

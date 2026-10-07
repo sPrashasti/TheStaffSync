@@ -3,9 +3,12 @@ const AppError = require('../utils/AppError');
 const { sendSuccess, sendCreated } = require('../utils/apiResponse');
 const { getPagination, buildPage } = require('../utils/pagination');
 const { toDateString, getTimeZone, dateStringToDate, dateToDateString } = require('../utils/dates');
+const notifications = require('../services/notificationService');
 
 const EDITABLE_FIELDS = ['title', 'description', 'trainer', 'startDate', 'endDate', 'capacity'];
 const DATE_FIELDS = ['startDate', 'endDate'];
+// Changes participants are told about.
+const NOTIFY_FIELDS = ['title', 'trainer', 'startDate', 'endDate'];
 
 const withCreator = { path: 'createdBy', select: 'name email role' };
 const withParticipants = {
@@ -139,6 +142,7 @@ const updateTraining = async (req, res) => {
     const enrolled = (await Training.findById(training._id).select('participants')).participants.length;
     throw new AppError(`Capacity cannot be less than the ${enrolled} people already enrolled`, 409);
   }
+  if (NOTIFY_FIELDS.some((field) => field in req.body)) await notifications.trainingChanged(updated);
 
   await updated.populate([withCreator, withParticipants]);
   sendSuccess(res, { message: 'Training updated', data: present(req, updated, today) });
@@ -153,6 +157,7 @@ const deleteTraining = async (req, res) => {
     throw new AppError('Trainings that have started cannot be deleted', 409);
   }
   await training.deleteOne();
+  await notifications.trainingCancelled(training);
   sendSuccess(res, { message: 'Training deleted', data: { _id: training._id } });
 };
 

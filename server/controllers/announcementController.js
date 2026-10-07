@@ -2,6 +2,7 @@ const Announcement = require('../models/Announcement');
 const AppError = require('../utils/AppError');
 const { sendSuccess, sendCreated } = require('../utils/apiResponse');
 const { getPagination, buildPage } = require('../utils/pagination');
+const notifications = require('../services/notificationService');
 
 const withAuthor = { path: 'createdBy', select: 'name email' };
 const EDITABLE_FIELDS = ['title', 'content', 'targetAudience'];
@@ -52,6 +53,7 @@ const getAnnouncement = async (req, res) => {
 const createAnnouncement = async (req, res) => {
   const { title, content, targetAudience } = req.body;
   const announcement = await Announcement.create({ title, content, targetAudience, createdBy: req.user._id });
+  await notifications.announcementPublished(announcement);
   await announcement.populate(withAuthor);
   sendCreated(res, { message: 'Announcement published', data: announcement });
 };
@@ -69,6 +71,7 @@ const updateAnnouncement = async (req, res) => {
 const deleteAnnouncement = async (req, res) => {
   const announcement = await loadVisible(req.params.id, req.user.role);
   await announcement.deleteOne();
+  await notifications.removeFor('Announcement', announcement._id);
   sendSuccess(res, { message: 'Announcement deleted', data: { _id: announcement._id } });
 };
 
