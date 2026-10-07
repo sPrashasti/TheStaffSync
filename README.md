@@ -11,8 +11,9 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | 0 | Requirements analysis | ✅ Complete |
 | 1 | Project setup, health check, CORS, centralised Axios | ✅ Complete |
 | 2 | MongoDB connection + Mongoose models | ✅ Complete |
-| 3 | Backend foundation: response helpers, error mapping | ⏳ Next |
-| 4–11 | Backend modules (auth, RBAC, employees, attendance, leave, HR, announcements, training, notifications) | Planned |
+| 3 | Backend foundation: response helpers, error mapping, validation | ✅ Complete |
+| 4 | Authentication (register, login, JWT) | ⏳ Next |
+| 5–11 | Backend modules (auth, RBAC, employees, attendance, leave, HR, announcements, training, notifications) | Planned |
 | 12–13 | Frontend integration + dashboards | Planned |
 | 14–18 | Testing, security hardening, optimisation, deployment | Planned |
 
@@ -20,12 +21,12 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 
 | Layer | Technology |
 |---|---|
-| Backend | Node.js (≥ 20.6), Express 5, Mongoose 9, dotenv, cors |
+| Backend | Node.js (≥ 20.6), Express 5, Mongoose 9, express-validator, dotenv, cors |
 | Database | MongoDB (local or Atlas) |
 | Frontend | React 19, Vite 8, Material UI, Axios, React Router, Redux Toolkit |
 | Testing | Postman / Newman |
 
-Planned later: `jsonwebtoken`, `bcryptjs` (Phase 4), `express-validator` (Phase 3–4).
+Planned later: `jsonwebtoken`, `bcryptjs` (Phase 4).
 
 ## Folder structure
 
@@ -35,11 +36,11 @@ TheStaffSync/
 │   ├── config/cors.js          CORS allow-list built from CLIENT_URL
 │   ├── config/db.js            MongoDB connection
 │   ├── controllers/            Request handlers (business logic)
-│   ├── middleware/             Error handling (auth/role/validation added later)
+│   ├── middleware/             Error handling, request validation (auth/roles added later)
 │   ├── models/                 Mongoose schemas — models/index.js loads them all
 │   ├── routes/                 Express routers — each one mounted in app.js
 │   ├── scripts/                Maintenance scripts (index sync)
-│   ├── utils/                  Shared helpers
+│   ├── utils/                  AppError, response helpers, pagination
 │   ├── app.js                  Builds the Express app (middleware + routes)
 │   ├── server.js               Loads .env, connects to MongoDB, then starts listening
 │   └── .env.example
@@ -117,6 +118,7 @@ npm run dev
 # → MongoDB connected: <host>/<database>
 # → StaffSync API listening on http://localhost:5000 (development)
 # → CORS allowed origins: http://localhost:5173
+# → Mounted routes: /api/health
 
 # Terminal 2 — frontend
 cd client
@@ -177,7 +179,54 @@ Every endpoint returns the same JSON shape so the frontend can handle responses 
 
 ```json
 { "success": true,  "message": "…", "data": { } }
-{ "success": false, "message": "Human-readable reason" }
+{ "success": false, "message": "Human-readable reason", "errors": [{ "field": "email", "message": "Email is not valid" }] }
+```
+
+`errors` appears only when there is something field-specific to report. Submitted values are never echoed back, because they may be passwords.
+
+Paginated lists accept `?page=&limit=` (default 10, maximum 100) and return:
+
+```json
+{ "success": true, "message": "…", "data": { "items": [], "page": 1, "limit": 10, "total": 42, "totalPages": 5 } }
+```
+
+### Error status codes
+
+All errors go through one handler ([server/middleware/errorMiddleware.js](server/middleware/errorMiddleware.js)):
+
+| Situation | Status | Message |
+|---|---|---|
+| Request validation failed (express-validator) | 400 | `Validation failed` + `errors` |
+| Schema validation failed (Mongoose) | 400 | `Validation failed` + `errors` |
+| Malformed JSON body | 400 | `Request body contains invalid JSON` |
+| Query on a field not in the schema | 400 | `Request contains an unknown field` |
+| Malformed `:id` checked with `validateObjectId()` | 400 | `Validation failed`, field `id` |
+| Malformed id that reaches the database unchecked | 404 | `Resource not found` |
+| Unknown route | 404 | `Route not found: METHOD /path` |
+| Duplicate value on a unique index | 409 | `A record with this email already exists` |
+| Body over 10 kB | 413 | `Request body is too large` |
+| Anything unexpected | 500 | The real message and `stack` in development; `Internal Server Error` in production |
+
+## Adding a backend module
+
+Each module from Phase 4 onwards follows the same four steps:
+
+1. **Controller**: an `async` function per endpoint. Throw `new AppError(message, status)` for expected failures and reply with `sendSuccess` / `sendCreated` from `utils/apiResponse.js`. Express 5 forwards errors from async functions to the error handler, so no try/catch or wrapper is needed.
+2. **Routes**: express-validator chains, then `validate`, then the controller. Use `validateObjectId()` on any `:id` route.
+3. **Mount**: add one line to the `routes` table in [server/app.js](server/app.js). The dev boot log prints this table, so check your path appears.
+4. **Test**: add requests to the Postman collection covering the success case and each error case.
+
+```js
+// routes/exampleRoutes.js
+router.get('/:id', validateObjectId(), getExample);
+router.post('/', body('title').trim().notEmpty().withMessage('Title is required'), validate, createExample);
+
+// controllers/exampleController.js
+const getExample = async (req, res) => {
+  const example = await Example.findById(req.params.id);
+  if (!example) throw new AppError('Example not found', 404);
+  sendSuccess(res, { data: example });
+};
 ```
 
 ## API reference
@@ -248,6 +297,7 @@ npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/St
 | `bad auth : Authentication failed` | Wrong database username or password in `MONGO_URI` — reset it in Atlas → Database Access |
 | `mongodb+srv URI cannot have port number` | The `@` before the cluster host was URL-encoded, or a `:port` was added — see *Database* above |
 | Server exits with a timeout / `ServerSelectionError` | Your IP is not on the Atlas Network Access list, or local MongoDB is not running |
+| A new endpoint returns `Route not found` | Its router is not in the `routes` table in `app.js` — check the `Mounted routes` boot log |
 | `Port 5000 is already in use` | Another process (or a second server terminal) is using the port — stop it or change `PORT` |
 | Page says "Unable to reach the server" | Backend not running, or `VITE_API_URL` wrong — restart Vite after editing `client/.env` |
 | `VITE_API_URL is not set` error in the browser | `client/.env` missing |

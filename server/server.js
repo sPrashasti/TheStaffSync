@@ -1,6 +1,7 @@
 require('dotenv').config({ quiet: true });
 
 const app = require('./app');
+const { mountedPaths } = app;
 const { connectDB, disconnectDB } = require('./config/db');
 const { allowedOrigins } = require('./config/cors');
 
@@ -20,6 +21,9 @@ const start = async () => {
   const server = app.listen(PORT, () => {
     console.log(`StaffSync API listening on http://localhost:${PORT} (${process.env.NODE_ENV || 'development'})`);
     console.log(`CORS allowed origins: ${allowedOrigins.join(', ') || '(none configured)'}`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`Mounted routes: ${mountedPaths.join(', ')}`);
+    }
   });
 
   server.on('error', (err) => {

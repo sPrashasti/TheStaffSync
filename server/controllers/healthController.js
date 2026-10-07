@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { sendSuccess } = require('../utils/apiResponse');
 
 const DB_STATES = {
   0: 'disconnected',
@@ -9,8 +10,7 @@ const DB_STATES = {
 
 // GET /api/health
 const getHealth = (req, res) => {
-  res.status(200).json({
-    success: true,
+  sendSuccess(res, {
     message: 'StaffSync API is running',
     data: {
       environment: process.env.NODE_ENV || 'development',
