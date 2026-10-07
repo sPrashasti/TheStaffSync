@@ -20,8 +20,8 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | 9 | Role dashboards and HR reports | ✅ Complete |
 | 10 | Announcements and training | ✅ Complete |
 | 11 | Notifications | ✅ Complete |
-| 12 | Frontend foundation: auth pages, session, protected routes, layout | ⏳ Next |
-| 13 | Role dashboards and pages using the real API | Planned |
+| 12 | Frontend foundation: auth pages, session, protected routes, layout | ✅ Complete |
+| 13 | Role dashboards and pages using the real API | ⏳ Next |
 | 14–18 | Testing, security hardening, optimisation, deployment | Planned |
 
 ## Tech stack
