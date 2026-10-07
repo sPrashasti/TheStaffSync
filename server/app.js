@@ -10,6 +10,8 @@ const attendanceRoutes = require('./routes/attendanceRoutes');
 const leaveRoutes = require('./routes/leaveRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const announcementRoutes = require('./routes/announcementRoutes');
+const trainingRoutes = require('./routes/trainingRoutes');
 
 const app = express();
 
@@ -27,6 +29,8 @@ const routes = [
   ['/api/leaves', leaveRoutes],
   ['/api/dashboard', dashboardRoutes],
   ['/api/reports', reportRoutes],
+  ['/api/announcements', announcementRoutes],
+  ['/api/trainings', trainingRoutes],
 ];
 routes.forEach(([path, router]) => app.use(path, router));
 

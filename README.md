@@ -18,8 +18,8 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | 7 | Attendance (check-in, check-out, history) | ✅ Complete |
 | 8 | Leave management (apply, approve, reject) | ✅ Complete |
 | 9 | Role dashboards and HR reports | ✅ Complete |
-| 10 | Announcements and training | ⏳ Next |
-| 11 | Notifications | Planned |
+| 10 | Announcements and training | ✅ Complete |
+| 11 | Notifications | ⏳ Next |
 | 12–13 | Frontend integration + dashboards | Planned |
 | 14–18 | Testing, security hardening, optimisation, deployment | Planned |
 
@@ -139,7 +139,7 @@ npm run dev
 # → CORS allowed origins: http://localhost:5173
 # → Default time zone: Asia/Kolkata
 # → Working days: Mon, Tue, Wed, Thu, Fri
-# → Mounted routes: /api/health, /api/auth, /api/employees, /api/attendance, /api/leaves, /api/dashboard, /api/reports
+# → Mounted routes: /api/health, /api/auth, /api/employees, /api/attendance, /api/leaves, /api/dashboard, /api/reports, /api/announcements, /api/trainings
 
 # Terminal 2 — frontend
 cd client
@@ -284,6 +284,19 @@ const getExample = async (req, res) => {
 | GET | `/api/reports/department-stats` | Yes | hr | 200 | 400, 401, 403 |
 | GET | `/api/reports/attendance-summary` | Yes | hr | 200 | 400, 401, 403 |
 | GET | `/api/reports/leave-summary` | Yes | hr | 200 | 400, 401, 403 |
+| GET | `/api/reports/training-summary` | Yes | hr | 200 | 400, 401, 403 |
+| GET | `/api/announcements` | Yes | any (audience-filtered) | 200 | 400, 401 |
+| GET | `/api/announcements/:id` | Yes | any (audience-filtered) | 200 | 400, 401, 404 |
+| POST | `/api/announcements` | Yes | hr | 201 | 400, 401, 403 |
+| PUT | `/api/announcements/:id` | Yes | hr | 200 | 400, 401, 403, 404 |
+| DELETE | `/api/announcements/:id` | Yes | hr | 200 | 400, 401, 403, 404 |
+| GET | `/api/trainings` | Yes | any | 200 | 400, 401 |
+| GET | `/api/trainings/:id` | Yes | any | 200 | 400, 401, 404 |
+| POST | `/api/trainings` | Yes | hr, manager | 201 | 400, 401, 403 |
+| PUT | `/api/trainings/:id` | Yes | hr, the manager who created it | 200 | 400, 401, 403, 404, 409 |
+| DELETE | `/api/trainings/:id` | Yes | hr, the manager who created it | 200 | 400, 401, 403, 404, 409 |
+| POST | `/api/trainings/:id/enroll` | Yes | employee, manager | 200 | 400, 401, 403, 404, 409 |
+| DELETE | `/api/trainings/:id/enroll` | Yes | employee, manager | 200 | 400, 401, 403, 404, 409 |
 
 More endpoints are added and documented phase by phase; the full planned list is in [docs/PHASE-0-REQUIREMENTS.md](docs/PHASE-0-REQUIREMENTS.md#5-api-endpoint-list).
 
@@ -563,6 +576,7 @@ Each role has one dashboard endpoint. Every number is calculated from MongoDB on
 | `today` | `status` (`not-checked-in`, `checked-in`, `checked-out`, `on-leave`), today's attendance `record`, and approved `leave` covering today |
 | `thisMonth` | `from` (1st) – `to` (today): `present`, `halfDay`, `absent`, `onLeave`, `totalHours` |
 | `leave` | `pending` count, `approvedDaysThisYear`, `upcoming` (next 5 approved requests) |
+| `trainings` | `enrolled`: up to 5 trainings you are enrolled in that have not finished |
 
 **`GET /api/dashboard/manager`** (manager)
 
@@ -579,6 +593,7 @@ Each role has one dashboard endpoint. Every number is calculated from MongoDB on
 | `headcount` | `active`, `inactive`, `byRole: { employee, manager, hr }`, number of `departments`, `joinedThisMonth` |
 | `today` | Company-wide `checkedIn`, `onLeave`, `notCheckedIn`, each judged by that employee's own today |
 | `leave` | `pending` requests, `approvedThisMonth` |
+| `training` | `upcoming` and `ongoing` training counts |
 | `recentJoiners` | 5 most recent active joiners |
 
 ### Reports (hr)
@@ -612,6 +627,64 @@ How the counts work:
 
 Days are clipped to the year: leave from 30 December to 2 January counts 2 days in each year.
 
+**`GET /api/reports/training-summary`**: optional `?year=` (default this year). Covers trainings that **start** in that year. Returns `totals` (`trainings`, `upcoming`, `ongoing`, `completed`, `seats`, `enrolments`, `fillRate` %) and `trainings[]` with `title`, `trainer`, dates, `capacity`, `enrolled`, `status` and `fillRate`.
+
+### Announcements
+
+HR publishes; everyone reads the announcements meant for them.
+
+```json
+{ "title": "Diwali celebration", "content": "Friday 18:00 on the rooftop.", "targetAudience": "all" }
+```
+
+| Field | Rules |
+|---|---|
+| `title` | Required, up to 150 characters |
+| `content` | Required, up to 5000 characters |
+| `targetAudience` | `all` (default), `employees` or `managers` |
+
+| Role | Sees |
+|---|---|
+| employee | `all` and `employees` |
+| manager | `all` and `managers` |
+| hr | everything; may filter with `?targetAudience=` |
+
+- The list is paginated, newest first, and includes the author (`createdBy: { name, email }`).
+- Opening an announcement outside your audience gives **404** `Announcement not found`, so its existence is not revealed.
+- Changing `targetAudience` changes who can see it straight away.
+- `DELETE` removes it permanently. Announcements are not people records, so there is no soft delete.
+
+### Training
+
+HR and managers create trainings; employees and managers enrol.
+
+```json
+{ "title": "Secure coding", "description": "OWASP Top 10", "trainer": "Security team", "startDate": "2026-11-02", "endDate": "2026-11-03", "capacity": 20 }
+```
+
+| Field | Rules |
+|---|---|
+| `title`, `trainer` | Required, up to 150 / 100 characters |
+| `description` | Optional, up to 2000 characters |
+| `startDate`, `endDate` | `YYYY-MM-DD`, end not before start, start not in the past |
+| `capacity` | Whole number 1–1000 |
+
+Every training response adds `status` (`upcoming`, `ongoing`, `completed`), `enrolledCount`, `seatsLeft` and `isEnrolled` (for the caller). The **participant list** is only included for HR and the manager who created the training.
+
+| Rule | Response |
+|---|---|
+| A manager may edit or delete only trainings they created; HR may change any | 403 `You can only change trainings you created` |
+| Capacity cannot go below the number already enrolled | 409 `Capacity cannot be less than the N people already enrolled` |
+| Completed trainings cannot be edited; trainings that have started cannot be deleted | 409 |
+| Enrol once per training | 409 `You are already enrolled in this training` |
+| No seats left | 409 `This training is full` |
+| Enrolment and withdrawal close once the training starts (the start day itself is still open) | 409 `Enrolment has closed because this training has started` |
+| HR cannot enrol | 403 |
+
+Enrolment is a single atomic update that checks seats, duplicates and dates together. Ten people racing for two seats get exactly two places.
+
+`GET /api/trainings` is paginated, soonest first, and accepts `?status=upcoming|ongoing|completed` and `?enrolled=true` (only trainings you are enrolled in). Training dates are judged in the company default time zone.
+
 ## CORS configuration
 
 The API only accepts browser requests from origins listed in `CLIENT_URL`.
@@ -631,7 +704,7 @@ Symptom of a CORS misconfiguration: the request works in Postman but the browser
 3. Click the environment's eye icon and fill in **hrPassword** and **managerPassword**. These are `SEED_HR_PASSWORD` and `SEED_DEMO_PASSWORD` from `server/.env`. Run `npm run seed:demo` first if you haven't. The passwords stay in your local Postman only; the committed environment file leaves them blank.
 4. Open the collection, choose **Run collection**, and run it with the backend started.
 
-Every request carries automated assertions. Expected result: **133 requests, 339 assertions, 0 failures**.
+Every request carries automated assertions. Expected result: **159 requests, 395 assertions, 0 failures**.
 
 **00 Health**
 
@@ -752,6 +825,22 @@ It only touches `postman+…@staffsync.test` accounts and refuses to run when `N
 | Reversed range / invalid year | 400 |
 | Wrong role on each dashboard or report | 403 |
 | Report without token | 401 |
+
+**07 Announcements & Training** (deletes the announcement and training it creates, so nothing piles up between runs)
+
+| Request | Expected |
+|---|---|
+| HR publishes for managers; invalid announcement; manager publishes | 201 / 400 / 403 |
+| Manager sees it; employee does not; employee opens it | listed / not listed / 404 |
+| HR widens audience to all; employee opens it | 200 / 200 |
+| Manager deletes / HR deletes | 403 / 200 |
+| Manager creates a 2-seat training; one in the past; employee creates | 201 / 400 / 403 |
+| Employee enrols; enrols again; second employee takes last seat; third finds it full | 200 / 409 / 200 / 409 |
+| Capacity below enrolment | 409 |
+| Creator sees participants; employee withdraws; employee lists own trainings | 200 with names / seat freed / listed |
+| HR enrols | 403 |
+| Training summary report shows 1 of 2 seats (50%); manager opens report | 200 / 403 |
+| Creator deletes; training then returns | 200 / 404 |
 
 From the command line (no Postman install needed):
 

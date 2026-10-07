@@ -35,4 +35,8 @@ const leaveSummaryRules = exactQuery([
   department,
 ]);
 
-module.exports = { noQueryRules, attendanceSummaryRules, leaveSummaryRules, MAX_REPORT_DAYS };
+const trainingSummaryRules = exactQuery([
+  query('year').optional().isInt({ min: 2000, max: 2100 }).withMessage('year must be between 2000 and 2100'),
+]);
+
+module.exports = { noQueryRules, attendanceSummaryRules, leaveSummaryRules, trainingSummaryRules, MAX_REPORT_DAYS };

@@ -1,5 +1,6 @@
 const Employee = require('../models/Employee');
 const Leave = require('../models/Leave');
+const Training = require('../models/Training');
 const User = require('../models/User');
 const { LEAVE_TYPES, LEAVE_STATUSES } = require('../models/Leave');
 const { sendSuccess } = require('../utils/apiResponse');
@@ -186,4 +187,55 @@ const getLeaveSummary = async (req, res) => {
   });
 };
 
-module.exports = { getDepartmentStats, getAttendanceSummary, getLeaveSummary };
+// GET /api/reports/training-summary — hr. Trainings starting in ?year= (default this year),
+// with enrolment and fill rate per training.
+const getTrainingSummary = async (req, res) => {
+  const today = toDateString(new Date(), getTimeZone());
+  const year = Number(req.query.year) || Number(today.slice(0, 4));
+  const todayDate = dateStringToDate(today);
+  const fillRate = (enrolled, capacity) => (capacity ? Math.round((enrolled / capacity) * 1000) / 10 : 0);
+
+  const trainings = await Training.aggregate([
+    { $match: { startDate: { $gte: dateStringToDate(`${year}-01-01`), $lte: dateStringToDate(`${year}-12-31`) } } },
+    { $sort: { startDate: 1 } },
+    {
+      $project: {
+        title: 1,
+        trainer: 1,
+        startDate: 1,
+        endDate: 1,
+        capacity: 1,
+        enrolled: { $size: '$participants' },
+        status: {
+          $switch: {
+            branches: [
+              { case: { $lt: ['$endDate', todayDate] }, then: 'completed' },
+              { case: { $gt: ['$startDate', todayDate] }, then: 'upcoming' },
+            ],
+            default: 'ongoing',
+          },
+        },
+      },
+    },
+  ]);
+
+  const totals = trainings.reduce((acc, t) => ({
+    trainings: acc.trainings + 1,
+    upcoming: acc.upcoming + (t.status === 'upcoming' ? 1 : 0),
+    ongoing: acc.ongoing + (t.status === 'ongoing' ? 1 : 0),
+    completed: acc.completed + (t.status === 'completed' ? 1 : 0),
+    seats: acc.seats + t.capacity,
+    enrolments: acc.enrolments + t.enrolled,
+  }), { trainings: 0, upcoming: 0, ongoing: 0, completed: 0, seats: 0, enrolments: 0 });
+
+  sendSuccess(res, {
+    message: 'Training summary',
+    data: {
+      year,
+      totals: { ...totals, fillRate: fillRate(totals.enrolments, totals.seats) },
+      trainings: trainings.map((t) => ({ ...t, fillRate: fillRate(t.enrolled, t.capacity) })),
+    },
+  });
+};
+
+module.exports = { getDepartmentStats, getAttendanceSummary, getLeaveSummary, getTrainingSummary };

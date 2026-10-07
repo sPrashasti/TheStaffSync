@@ -3960,6 +3960,772 @@
           }
         }
       ]
+    },
+    {
+      "name": "07 Announcements & Training",
+      "item": [
+        {
+          "name": "HR publishes announcement for managers",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Announcement published\"));",
+                  "pm.test('audience saved', () => pm.expect(body.data.targetAudience).to.eql('managers'));",
+                  "pm.environment.set('announcementId', body.data._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/announcements",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Postman: manager briefing\",\n  \"content\": \"Quarterly planning on Friday.\",\n  \"targetAudience\": \"managers\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Invalid announcement returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('title and audience errors', () => pm.expect(body.errors.map((e) => e.field)).to.include.members(['title', 'targetAudience']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/announcements",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"\",\n  \"content\": \"x\",\n  \"targetAudience\": \"everyone\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Manager cannot publish",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/announcements",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"t\",\n  \"content\": \"c\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Manager sees managers announcement",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const ids = body.data.items.map((i) => i._id);",
+                  "pm.test('listed', () => pm.expect(ids).to.include(pm.environment.get('announcementId')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/announcements"
+          }
+        },
+        {
+          "name": "Employee does not see it",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const ids = body.data.items.map((i) => i._id);",
+                  "pm.test('not listed', () => pm.expect(ids).to.not.include(pm.environment.get('announcementId')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/announcements"
+          }
+        },
+        {
+          "name": "Employee opening it gets 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Announcement not found\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/announcements/{{announcementId}}"
+          }
+        },
+        {
+          "name": "HR widens audience to all",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('audience updated', () => pm.expect(body.data.targetAudience).to.eql('all'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/announcements/{{announcementId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetAudience\": \"all\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Employee now sees it",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/announcements/{{announcementId}}"
+          }
+        },
+        {
+          "name": "Manager cannot delete",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/announcements/{{announcementId}}"
+          }
+        },
+        {
+          "name": "HR deletes announcement",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Announcement deleted\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/announcements/{{announcementId}}"
+          }
+        },
+        {
+          "name": "Manager creates training (2 seats)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const day = (n) => { const d = new Date(); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };",
+                  "pm.environment.set('trainingStart', day(21));",
+                  "pm.environment.set('trainingEnd', day(22));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Training created\"));",
+                  "pm.test('upcoming with 2 seats', () => { pm.expect(body.data.status).to.eql('upcoming'); pm.expect(body.data.seatsLeft).to.eql(2); });",
+                  "pm.environment.set('trainingId', body.data._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/trainings",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Postman: API testing workshop\",\n  \"description\": \"Hands-on Postman and Newman\",\n  \"trainer\": \"QA Guild\",\n  \"startDate\": \"{{trainingStart}}\",\n  \"endDate\": \"{{trainingEnd}}\",\n  \"capacity\": 2\n}"
+            }
+          }
+        },
+        {
+          "name": "Training in the past returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('startDate error', () => pm.expect(body.errors).to.deep.include({ field: 'startDate', message: 'Start date cannot be in the past' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/trainings",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Old\",\n  \"trainer\": \"X\",\n  \"startDate\": \"2020-01-01\",\n  \"endDate\": \"2020-01-02\",\n  \"capacity\": 5\n}"
+            }
+          }
+        },
+        {
+          "name": "Employee cannot create training",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/trainings",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"X\",\n  \"trainer\": \"X\",\n  \"startDate\": \"2030-01-01\",\n  \"endDate\": \"2030-01-01\",\n  \"capacity\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "Employee enrols",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Enrolled\"));",
+                  "pm.test('enrolled, 1 seat left', () => { pm.expect(body.data.isEnrolled).to.eql(true); pm.expect(body.data.seatsLeft).to.eql(1); });",
+                  "pm.test('employee does not see participant list', () => pm.expect(body.data).to.not.have.property('participants'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/trainings/{{trainingId}}/enroll"
+          }
+        },
+        {
+          "name": "Enrolling twice returns 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You are already enrolled in this training\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/trainings/{{trainingId}}/enroll"
+          }
+        },
+        {
+          "name": "Second employee takes the last seat",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('no seats left', () => pm.expect(body.data.seatsLeft).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/trainings/{{trainingId}}/enroll"
+          }
+        },
+        {
+          "name": "Full training returns 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"This training is full\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{attToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/trainings/{{trainingId}}/enroll"
+          }
+        },
+        {
+          "name": "Capacity below enrolment returns 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Capacity cannot be less than the 2 people already enrolled\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/trainings/{{trainingId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"capacity\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "Creator sees participants",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('two participants with names', () => { pm.expect(body.data.participants).to.have.length(2); pm.expect(body.data.participants[0].userId).to.have.property('name'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/trainings/{{trainingId}}"
+          }
+        },
+        {
+          "name": "Employee withdraws",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Withdrawn\"));",
+                  "pm.test('seat freed', () => { pm.expect(body.data.isEnrolled).to.eql(false); pm.expect(body.data.seatsLeft).to.eql(1); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/trainings/{{trainingId}}/enroll"
+          }
+        },
+        {
+          "name": "Employee lists own trainings",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const ids = body.data.items.map((i) => i._id);",
+                  "pm.test('includes the training', () => pm.expect(ids).to.include(pm.environment.get('trainingId')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/trainings?enrolled=true"
+          }
+        },
+        {
+          "name": "HR cannot enrol",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/trainings/{{trainingId}}/enroll"
+          }
+        },
+        {
+          "name": "Training summary report",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const row = body.data.trainings.find((t) => t._id === pm.environment.get('trainingId'));",
+                  "pm.test('training in report with 1 of 2 seats (50%)', () => { pm.expect(row.enrolled).to.eql(1); pm.expect(row.fillRate).to.eql(50); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/training-summary"
+          }
+        },
+        {
+          "name": "Manager cannot view training report",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/training-summary"
+          }
+        },
+        {
+          "name": "Creator deletes training",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Training deleted\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/trainings/{{trainingId}}"
+          }
+        },
+        {
+          "name": "Deleted training returns 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Training not found\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/trainings/{{trainingId}}"
+          }
+        }
+      ]
     }
   ],
   "variable": [

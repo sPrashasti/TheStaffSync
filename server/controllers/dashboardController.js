@@ -1,5 +1,6 @@
 const Employee = require('../models/Employee');
 const Leave = require('../models/Leave');
+const Training = require('../models/Training');
 const User = require('../models/User');
 const { sendSuccess } = require('../utils/apiResponse');
 const { toDateString, employeeTimeZone, getTimeZone, dateStringToDate } = require('../utils/dates');
@@ -59,7 +60,8 @@ const personalSummary = async (employee) => {
   const monthStart = `${today.slice(0, 8)}01`;
   const year = today.slice(0, 4);
 
-  const [statuses, [month], pending, approvedDaysThisYear, upcoming] = await Promise.all([
+  const companyTodayDate = dateStringToDate(toDateString(new Date(), getTimeZone()));
+  const [statuses, [month], pending, approvedDaysThisYear, upcoming, trainings] = await Promise.all([
     todayStatuses([employee]),
     attendanceBreakdown([employee], monthStart, today),
     Leave.countDocuments({ employeeId: employee._id, status: 'pending' }),
@@ -67,6 +69,11 @@ const personalSummary = async (employee) => {
     Leave.find({ employeeId: employee._id, status: 'approved', startDate: { $gte: dateStringToDate(today) } })
       .sort({ startDate: 1 })
       .limit(RECENT_LIMIT),
+    // Trainings this person is enrolled in that have not finished yet.
+    Training.find({ participants: employee._id, endDate: { $gte: companyTodayDate } })
+      .sort({ startDate: 1 })
+      .limit(RECENT_LIMIT)
+      .select('title trainer startDate endDate'),
   ]);
   const todayStatus = statuses.get(String(employee._id));
 
@@ -84,6 +91,7 @@ const personalSummary = async (employee) => {
       totalHours: month.totalHours,
     },
     leave: { pending, approvedDaysThisYear, upcoming },
+    trainings: { enrolled: trainings },
   };
 };
 
@@ -138,7 +146,8 @@ const getHrDashboard = async (req, res) => {
   const employees = await activeEmployees();
   const activeIds = employees.map((e) => e._id);
 
-  const [roleCounts, statuses, pending, approvedThisMonth, recentJoiners, joinedThisMonth] = await Promise.all([
+  const todayDate = dateStringToDate(today);
+  const [roleCounts, statuses, pending, approvedThisMonth, recentJoiners, joinedThisMonth, upcomingTrainings, ongoingTrainings] = await Promise.all([
     User.aggregate([{ $group: { _id: { role: '$role', isActive: '$isActive' }, count: { $sum: 1 } } }]),
     todayStatuses(employees),
     Leave.countDocuments({ status: 'pending' }),
@@ -149,6 +158,8 @@ const getHrDashboard = async (req, res) => {
       .select('employeeId department designation joiningDate userId')
       .populate('userId', 'name email'),
     Employee.countDocuments({ _id: { $in: activeIds }, joiningDate: { $gte: monthStart } }),
+    Training.countDocuments({ startDate: { $gt: todayDate } }),
+    Training.countDocuments({ startDate: { $lte: todayDate }, endDate: { $gte: todayDate } }),
   ]);
 
   const byRole = { employee: 0, manager: 0, hr: 0 };
@@ -171,6 +182,7 @@ const getHrDashboard = async (req, res) => {
       },
       today: countStatuses(statuses),
       leave: { pending, approvedThisMonth },
+      training: { upcoming: upcomingTrainings, ongoing: ongoingTrainings },
       recentJoiners,
     },
   });
