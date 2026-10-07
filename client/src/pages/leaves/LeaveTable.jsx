@@ -19,6 +19,7 @@ import Pager from '../../components/Pager';
 import StatusChip from '../../components/StatusChip';
 import TableMessage from '../../components/TableMessage';
 import { useApi } from '../../hooks/useApi';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useSnackbar } from '../../hooks/useSnackbar';
 import { getMyTeam } from '../../services/employeeService';
 import { approveLeave, getAllLeaves, getMyLeaves, getTeamLeaves } from '../../services/leaveService';
@@ -35,7 +36,9 @@ const compact = (params) => Object.fromEntries(Object.entries(params).filter(([,
 function LeaveTable({ scope = 'my', defaultStatus = '', refreshKey = 0 }) {
   const toast = useSnackbar();
   const [filters, setFilters] = useState({ status: defaultStatus, leaveType: '', employeeId: '', department: '', page: 1, limit: 10 });
-  const { data, loading, error, reload } = useApi(() => FETCHERS[scope](compact(filters)), [scope, filters, refreshKey]);
+  // The department box waits for a pause in typing before asking the server.
+  const query = { ...filters, department: useDebouncedValue(filters.department) };
+  const { data, loading, error, reload } = useApi(() => FETCHERS[scope](compact(query)), [scope, query, refreshKey]);
   const team = useApi(() => (scope === 'team' ? getMyTeam() : Promise.resolve([])), [scope]);
   const [rejecting, setRejecting] = useState(null);
   const [busyId, setBusyId] = useState(null);

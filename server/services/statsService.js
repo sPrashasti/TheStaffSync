@@ -22,13 +22,25 @@ const groupBy = (items, keyOf) => items.reduce((map, item) => {
   return map;
 }, new Map());
 
-// Active employees matching `filter`, with name and email, sorted by employee code.
-const activeEmployees = async (filter = {}) => {
-  const activeUserIds = await User.find({ isActive: true }).distinct('_id');
-  return Employee.find({ ...filter, userId: { $in: activeUserIds } })
-    .populate('userId', 'name email role')
-    .sort({ employeeId: 1 });
-};
+// Active employees matching `filter` (already-typed values, e.g. ObjectIds), sorted by employee
+// code, as plain objects with userId: { _id, name, email, role }. One aggregation instead of
+// three queries, and no Mongoose documents to build: the callers only read fields.
+const activeEmployees = (filter = {}) => Employee.aggregate([
+  { $match: filter },
+  {
+    $lookup: {
+      from: User.collection.collectionName,
+      localField: 'userId',
+      foreignField: '_id',
+      as: 'user',
+      pipeline: [{ $match: { isActive: true } }, { $project: { name: 1, email: 1, role: 1 } }],
+    },
+  },
+  { $unwind: '$user' },
+  { $set: { userId: '$user' } },
+  { $unset: 'user' },
+  { $sort: { employeeId: 1 } },
+]);
 
 // For each employee: today's date in their time zone, today's attendance record and any approved
 // leave covering today. One query per distinct time zone, not per employee.
@@ -102,6 +114,12 @@ const attendanceBreakdown = async (employees, from, to, now = new Date()) => {
   const statsOf = new Map(grouped.map((g) => [String(g._id), g]));
   const leavesOf = groupBy(leaves, (l) => String(l.employeeId));
 
+  // Working days in the range, worked out once and shared by everyone.
+  const workingDates = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    if (isWorkingDay(d, workingDays)) workingDates.push(d);
+  }
+
   return employees.map((e) => {
     const stats = statsOf.get(String(e._id)) || { present: 0, halfDay: 0, totalHours: 0, dates: [] };
     const attended = new Set(stats.dates);
@@ -115,8 +133,8 @@ const attendanceBreakdown = async (employees, from, to, now = new Date()) => {
 
     let absent = 0;
     let onLeave = 0;
-    for (let d = start; d <= end; d = addDays(d, 1)) {
-      if (isWorkingDay(d, workingDays) && !attended.has(d)) {
+    for (const d of workingDates) {
+      if (d >= start && d <= end && !attended.has(d)) {
         if (onLeaveOn(d)) onLeave += 1;
         else absent += 1;
       }

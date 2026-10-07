@@ -17,6 +17,7 @@ import Pager from '../../components/Pager';
 import StatusChip from '../../components/StatusChip';
 import TableMessage from '../../components/TableMessage';
 import { useApi } from '../../hooks/useApi';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { getAllAttendance, getMyAttendance, getTeamAttendance } from '../../services/attendanceService';
 import { getMyTeam } from '../../services/employeeService';
 import { selectDisplayTimeZone } from '../../store/preferencesSlice';
@@ -31,7 +32,9 @@ const compact = (params) => Object.fromEntries(Object.entries(params).filter(([,
 function AttendanceHistory({ scope = 'my' }) {
   const displayTimeZone = useSelector(selectDisplayTimeZone);
   const [filters, setFilters] = useState({ from: '', to: '', employeeId: '', department: '', status: '', page: 1, limit: 10 });
-  const { data, loading, error, reload } = useApi(() => FETCHERS[scope](compact(filters)), [scope, filters]);
+  // The department box waits for a pause in typing before asking the server.
+  const query = { ...filters, department: useDebouncedValue(filters.department) };
+  const { data, loading, error, reload } = useApi(() => FETCHERS[scope](compact(query)), [scope, query]);
   const team = useApi(() => (scope === 'team' ? getMyTeam() : Promise.resolve([])), [scope]);
 
   const set = (field) => (e) => setFilters({ ...filters, [field]: e.target.value, page: 1 });

@@ -25,7 +25,14 @@ const protect = async (req, res, next) => {
     throw new AppError('Invalid token. Please log in again.', 401);
   }
 
-  const user = await User.findById(payload.id).select('+passwordChangedAt');
+  // The user and their employee record in one round trip (this runs on every request).
+  // Secrets are left out here, so they never reach a request handler.
+  const [found] = await User.aggregate([
+    { $match: { _id: new mongoose.Types.ObjectId(payload.id) } },
+    { $lookup: { from: Employee.collection.collectionName, localField: '_id', foreignField: 'userId', as: 'employee' } },
+    { $project: { password: 0, passwordResetTokenHash: 0, passwordResetExpires: 0 } },
+  ]);
+  const user = found && User.hydrate({ ...found, employee: undefined });
   if (!user) {
     throw new AppError('The account for this token no longer exists.', 401);
   }
@@ -37,6 +44,8 @@ const protect = async (req, res, next) => {
   }
 
   req.user = user;
+  // Kept for loadEmployee, so routes that need the profile do not query again.
+  req.employeeLookup = found.employee[0] ? Employee.hydrate(found.employee[0]) : null;
   next();
 };
 
@@ -65,7 +74,9 @@ const authorize = (...roles) => {
 // Attaches the logged-in user's Employee profile as req.employee. Team and "own record"
 // scoping is always worked out from this, never from ids sent by the client.
 const loadEmployee = async (req, res, next) => {
-  const employee = await Employee.findOne({ userId: req.user._id });
+  const employee = req.employeeLookup !== undefined
+    ? req.employeeLookup
+    : await Employee.findOne({ userId: req.user._id });
   if (!employee) {
     throw new AppError('No employee profile exists for this account. Contact HR.', 404);
   }

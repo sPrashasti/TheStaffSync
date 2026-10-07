@@ -51,7 +51,9 @@ const attendanceSchema = new mongoose.Schema(
 
 // One record per employee per day: the database itself rejects a second check-in.
 attendanceSchema.index({ employeeId: 1, date: 1 }, { unique: true });
-attendanceSchema.index({ date: 1 });
+// Serves date filters and the newest-first sort ({ date: -1, checkIn: -1 }, read backwards), so
+// company-wide lists never sort every record in memory.
+attendanceSchema.index({ date: 1, checkIn: 1 });
 
 module.exports = mongoose.model('Attendance', attendanceSchema);
 module.exports.ATTENDANCE_STATUSES = ATTENDANCE_STATUSES;

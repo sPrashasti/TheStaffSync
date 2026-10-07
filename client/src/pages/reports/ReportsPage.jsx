@@ -25,6 +25,7 @@ import StatCard, { StatGrid } from '../../components/StatCard';
 import StatusChip from '../../components/StatusChip';
 import TableMessage from '../../components/TableMessage';
 import { useApi } from '../../hooks/useApi';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import {
   getAttendanceSummary,
   getDepartmentStats,
@@ -103,7 +104,9 @@ function DepartmentsReport() {
 
 function AttendanceReport() {
   const [filters, setFilters] = useState({ from: '', to: '', department: '', page: 1, limit: 25 });
-  const { data, loading, error, reload } = useApi(() => getAttendanceSummary(compact(filters)), [filters]);
+  // The department box waits for a pause in typing before asking the server.
+  const query = { ...filters, department: useDebouncedValue(filters.department) };
+  const { data, loading, error, reload } = useApi(() => getAttendanceSummary(compact(query)), [query]);
   const set = (field) => (e) => setFilters({ ...filters, [field]: e.target.value, page: 1 });
   return (
     <>

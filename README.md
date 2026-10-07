@@ -24,8 +24,9 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | 13 | Role dashboards and pages using the real API | ✅ Complete |
 | 14 | Automated tests and end-to-end leave workflow | ✅ Complete |
 | 15 | Security hardening | ✅ Complete |
-| 16 | Pagination and measured optimisation | ⏳ Next |
-| 17–18 | Acceptance check, deployment | Planned |
+| 16 | Pagination and measured optimisation | ✅ Complete |
+| 17 | Full acceptance check | ⏳ Next |
+| 18 | Deployment | Planned |
 
 ## Tech stack
 
@@ -47,7 +48,7 @@ TheStaffSync/
 │   ├── middleware/             Error handling, validation, protect / authorize / loadEmployee
 │   ├── models/                 Mongoose schemas — models/index.js loads them all
 │   ├── routes/                 Express routers — each one mounted in app.js
-│   ├── scripts/                Maintenance scripts (index sync, test-data clean-up)
+│   ├── scripts/                Maintenance scripts (index sync, test-data clean-up, benchmark)
 │   ├── seed/seed.js            Creates the first HR account (and optional demo data)
 │   ├── services/               Shared statistics used by dashboards and reports
 │   ├── utils/                  AppError, response helpers, pagination, JWT, password policy
@@ -807,6 +808,53 @@ Notifications are created automatically by other modules and stored in MongoDB:
 | `GET /api/notifications` | Your own, newest first, paginated. `?isRead=true|false` filters. `data.unreadCount` is always your total unread, for a badge |
 | `PUT /api/notifications/:id/read` | Marks one read. Someone else's gives **404** `Notification not found` |
 | `PUT /api/notifications/read-all` | Marks all yours read; `data.updated` says how many |
+
+## Performance
+
+Measured, not guessed: `npm run bench` (in `server`) loads a realistic company into a throwaway database (`staffsync_test_perf`), times every main endpoint, checks how MongoDB answers the main queries, then deletes the data.
+
+```bash
+cd server
+npm run bench              # seed, measure, clean up (about 2 minutes)
+npm run bench -- --keep    # keep the data for repeat runs
+npm run bench -- --reuse   # measure kept data without re-seeding
+```
+
+**Test data:**
+- 500 people (40 managers) in 8 departments
+- 60 working days of attendance (~18,700 records)
+- 1,500 leave requests, 5,000 notifications, 60 trainings
+
+**Results** (median of 11 calls, Atlas free tier, where one database round trip is about 25 ms):
+
+| Endpoint | Before | After |
+|---|---|---|
+| Manager dashboard | 166 ms | 87 ms |
+| HR dashboard | 279 ms | ~200–240 ms |
+| Employee dashboard | 79 ms | 56 ms |
+| Attendance report, one month | 370 ms | 280 ms |
+| Attendance report, 60 days | 560 ms | 432 ms |
+| HR "All attendance" list | 149 ms | ~106–137 ms |
+| My attendance / My leave | 79 / 104 ms | 55 / 79 ms |
+| Team leave / Team attendance | 156 / 156 ms | 134 / 133 ms |
+
+Other endpoints were already 50–140 ms and stayed there. Single runs vary by ±20% on the shared cluster, so compare several runs before drawing conclusions.
+
+**What was changed, and why:**
+
+| Measurement | Change |
+|---|---|
+| The company-wide attendance list read **all 18,668** records and sorted them in memory to show 25. That would get slower every day, and MongoDB refuses in-memory sorts over 100 MB | Index `{ date, checkIn }` serves the newest-first sort: it now reads exactly 25 |
+| Every signed-in request made two round trips before doing any work (user, then employee profile) | One aggregation fetches both; saves ~25 ms on every request that needs the profile |
+| Loading active employees for dashboards and reports took 173 ms over three sequential queries | One aggregation returning plain objects |
+| The absence calculation rebuilt the calendar for each of 500 people (59 ms) | Working days are worked out once per report |
+| Typing in a *Department* filter sent a request per keystroke | The frontend waits for a 350 ms pause |
+
+**Considered and not done:**
+- **Response compression:** the largest list responses are 12–15 kB, so the saving would be small next to the CPU cost.
+- **An index on `User.isActive`:** with 98% of users active, MongoDB would still read nearly every record; it is 500 small documents.
+
+**Pagination.** Every list that can grow is paginated with `?page=&limit=`: employees, attendance, leave, trainings, announcements, notifications, and the per-person rows of the attendance report. `limit` is capped at 100, so no request can ask for a whole collection. The exceptions are deliberately unpaginated: a manager's own team (`/employees/team`, direct reports only) and the dashboard summaries, which return fixed-size results.
 
 ## Security
 

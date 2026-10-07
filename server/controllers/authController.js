@@ -65,7 +65,7 @@ const login = async (req, res) => {
 
 // GET /api/auth/me — any logged-in user. Returns the account and its employee profile.
 const getMe = async (req, res) => {
-  const employee = await Employee.findOne({ userId: req.user._id });
+  const employee = req.employeeLookup ?? await Employee.findOne({ userId: req.user._id });
   sendSuccess(res, {
     message: 'Current user',
     data: { user: req.user, employee },

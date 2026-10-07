@@ -21,6 +21,7 @@ import Pager from '../../components/Pager';
 import StatusChip from '../../components/StatusChip';
 import TableMessage from '../../components/TableMessage';
 import { useApi } from '../../hooks/useApi';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useSnackbar } from '../../hooks/useSnackbar';
 import { deactivateEmployee, listEmployees, updateEmployee } from '../../services/employeeService';
 import { selectUser } from '../../store/authSlice';
@@ -35,7 +36,9 @@ function EmployeesPage({ fixedRole }) {
   const toast = useSnackbar();
   const me = useSelector(selectUser);
   const [filters, setFilters] = useState({ department: '', role: fixedRole || '', isActive: 'true', page: 1, limit: 10 });
-  const { data, loading, error, reload } = useApi(() => listEmployees(compact(filters)), [filters]);
+  // The department box waits for a pause in typing before asking the server.
+  const query = { ...filters, department: useDebouncedValue(filters.department) };
+  const { data, loading, error, reload } = useApi(() => listEmployees(compact(query)), [query]);
   const [editing, setEditing] = useState(null);
   const [creating, setCreating] = useState(false);
   const [confirming, setConfirming] = useState(null);
