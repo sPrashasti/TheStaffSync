@@ -1,3 +1,4 @@
+const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 
 const ROLES = ['employee', 'manager', 'hr'];
@@ -18,7 +19,7 @@ const userSchema = new mongoose.Schema(
       trim: true,
       match: [/^\S+@\S+\.\S+$/, 'Email is not valid'],
     },
-    // Stores the bcrypt hash (hashing is added in Phase 4). Never returned by queries
+    // Stores the bcrypt hash (see the pre-save hook below). Never returned by queries
     // unless explicitly requested with .select('+password').
     password: {
       type: String,
@@ -49,6 +50,20 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.index({ role: 1, isActive: 1 });
+
+const SALT_ROUNDS = 12;
+
+// Hash on create and whenever the password changes, never on other updates.
+// Only covers save()/create(); updateOne/findOneAndUpdate would bypass this, so never set passwords that way.
+userSchema.pre('save', async function hashPassword() {
+  if (!this.isModified('password')) return;
+  this.password = await bcrypt.hash(this.password, SALT_ROUNDS);
+});
+
+// Requires the document to have been loaded with .select('+password').
+userSchema.methods.comparePassword = function comparePassword(candidate) {
+  return bcrypt.compare(candidate, this.password);
+};
 
 module.exports = mongoose.model('User', userSchema);
 module.exports.ROLES = ROLES;

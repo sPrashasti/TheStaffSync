@@ -4,6 +4,7 @@ const app = require('./app');
 const { mountedPaths } = app;
 const { connectDB, disconnectDB } = require('./config/db');
 const { allowedOrigins } = require('./config/cors');
+const { assertJwtConfig } = require('./utils/token');
 
 // Registers every model so Mongoose builds their indexes on connect.
 require('./models');
@@ -11,6 +12,13 @@ require('./models');
 const PORT = process.env.PORT || 5000;
 
 const start = async () => {
+  try {
+    assertJwtConfig();
+  } catch (err) {
+    console.error(`Configuration error: ${err.message}`);
+    process.exit(1);
+  }
+
   try {
     await connectDB();
   } catch (err) {

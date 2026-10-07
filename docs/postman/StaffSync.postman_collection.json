@@ -55,8 +55,16 @@
           "name": "Malformed JSON returns 400",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{bad json" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{bad json"
+            },
             "url": "{{baseUrl}}/health"
           },
           "event": [
@@ -76,7 +84,12 @@
           "name": "Disallowed CORS origin returns 403",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Origin", "value": "http://evil.example.com" }],
+            "header": [
+              {
+                "key": "Origin",
+                "value": "http://evil.example.com"
+              }
+            ],
             "url": "{{baseUrl}}/health"
           },
           "event": [
@@ -91,6 +104,463 @@
               }
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "01 Auth",
+      "item": [
+        {
+          "name": "Register employee",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Fresh account each run so the collection can be re-run.",
+                  "pm.collectionVariables.set('regEmail', 'postman+' + Date.now() + '@staffsync.test');",
+                  "pm.collectionVariables.set('regPassword', 'Passw0rd123');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('success is true', () => pm.expect(body.success).to.eql(true));",
+                  "pm.test('token returned', () => pm.expect(body.data.token).to.be.a('string').and.not.empty);",
+                  "pm.test('role is employee', () => pm.expect(body.data.user.role).to.eql('employee'));",
+                  "pm.test('employee profile created', () => { pm.expect(body.data.employee.employeeId).to.match(/^EMP\\d{4,}$/); pm.expect(body.data.employee.userId).to.eql(body.data.user._id); });",
+                  "pm.test('password never returned', () => pm.expect(JSON.stringify(body)).to.not.include('password'));",
+                  "pm.environment.set('employeeToken', body.data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Employee\",\n  \"email\": \"{{regEmail}}\",\n  \"password\": \"{{regPassword}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Register ignores role field",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('roleEmail', 'postman+role' + Date.now() + '@staffsync.test');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('role forced to employee', () => pm.expect(body.data.user.role).to.eql('employee'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Would-be HR\",\n  \"email\": \"{{roleEmail}}\",\n  \"password\": \"Passw0rd123\",\n  \"role\": \"hr\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Register duplicate email returns 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"An account with this email already exists\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Duplicate\",\n  \"email\": \"{{regEmail}}\",\n  \"password\": \"Passw0rd123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Register missing fields returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Validation failed\"));",
+                  "pm.test('name error reported', () => pm.expect(body.errors.map((e) => e.field)).to.include('name'));",
+                  "pm.test('email error reported', () => pm.expect(body.errors.map((e) => e.field)).to.include('email'));",
+                  "pm.test('password error reported', () => pm.expect(body.errors.map((e) => e.field)).to.include('password'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Register weak password returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Validation failed\"));",
+                  "pm.test('password error reported', () => pm.expect(body.errors.map((e) => e.field)).to.include('password'));",
+                  "pm.test('submitted password not echoed', () => pm.expect(pm.response.text()).to.not.include('\"short\"'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Weak\",\n  \"email\": \"weak@staffsync.test\",\n  \"password\": \"short\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success is true', () => pm.expect(body.success).to.eql(true));",
+                  "pm.test('token returned', () => pm.expect(body.data.token).to.be.a('string').and.not.empty);",
+                  "pm.test('user returned', () => pm.expect(body.data.user.email).to.eql(pm.collectionVariables.get('regEmail')));",
+                  "pm.test('password never returned', () => pm.expect(JSON.stringify(body)).to.not.include('password'));",
+                  "pm.environment.set('employeeToken', body.data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{regEmail}}\",\n  \"password\": \"{{regPassword}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login email is case-insensitive",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('regEmailUpper', pm.collectionVariables.get('regEmail').toUpperCase());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{regEmailUpper}}\",\n  \"password\": \"{{regPassword}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login wrong password returns 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Invalid email or password\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{regEmail}}\",\n  \"password\": \"WrongPass999\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login unknown email returns same 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Invalid email or password\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nobody@staffsync.test\",\n  \"password\": \"Passw0rd123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login with operator injection returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Validation failed\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": {\n    \"$gt\": \"\"\n  },\n  \"password\": {\n    \"$gt\": \"\"\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Get current user",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('correct user', () => pm.expect(body.data.user.email).to.eql(pm.collectionVariables.get('regEmail')));",
+                  "pm.test('employee profile included', () => pm.expect(body.data.employee.department).to.eql('Unassigned'));",
+                  "pm.test('password never returned', () => pm.expect(JSON.stringify(body)).to.not.include('password'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "Get current user without token returns 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Not authenticated. Please log in.\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "Get current user with invalid token returns 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Invalid token. Please log in again.\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer not.a.realtoken"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "Get current user with wrong auth scheme returns 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Not authenticated. Please log in.\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic {{employeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/me"
+          }
         }
       ]
     }

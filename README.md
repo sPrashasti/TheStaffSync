@@ -12,8 +12,9 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | 1 | Project setup, health check, CORS, centralised Axios | ✅ Complete |
 | 2 | MongoDB connection + Mongoose models | ✅ Complete |
 | 3 | Backend foundation: response helpers, error mapping, validation | ✅ Complete |
-| 4 | Authentication (register, login, JWT) | ⏳ Next |
-| 5–11 | Backend modules (auth, RBAC, employees, attendance, leave, HR, announcements, training, notifications) | Planned |
+| 4 | Authentication (register, login, JWT) | ✅ Complete |
+| 5 | Role-based access control | ⏳ Next |
+| 6–11 | Backend modules (employees, attendance, leave, HR, announcements, training, notifications) | Planned |
 | 12–13 | Frontend integration + dashboards | Planned |
 | 14–18 | Testing, security hardening, optimisation, deployment | Planned |
 
@@ -21,12 +22,10 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 
 | Layer | Technology |
 |---|---|
-| Backend | Node.js (≥ 20.6), Express 5, Mongoose 9, express-validator, dotenv, cors |
+| Backend | Node.js (≥ 20.6), Express 5, Mongoose 9, express-validator, jsonwebtoken, bcryptjs, dotenv, cors |
 | Database | MongoDB (local or Atlas) |
 | Frontend | React 19, Vite 8, Material UI, Axios, React Router, Redux Toolkit |
 | Testing | Postman / Newman |
-
-Planned later: `jsonwebtoken`, `bcryptjs` (Phase 4).
 
 ## Folder structure
 
@@ -40,7 +39,8 @@ TheStaffSync/
 │   ├── models/                 Mongoose schemas — models/index.js loads them all
 │   ├── routes/                 Express routers — each one mounted in app.js
 │   ├── scripts/                Maintenance scripts (index sync)
-│   ├── utils/                  AppError, response helpers, pagination
+│   ├── utils/                  AppError, response helpers, pagination, JWT
+│   ├── validators/             express-validator rules per module
 │   ├── app.js                  Builds the Express app (middleware + routes)
 │   ├── server.js               Loads .env, connects to MongoDB, then starts listening
 │   └── .env.example
@@ -87,7 +87,7 @@ Then edit both `.env` files (see below).
 | `NODE_ENV` | `development` or `production` (production hides stack traces) | `development` |
 | `PORT` | Port the API listens on | `5000` |
 | `MONGO_URI` | MongoDB connection string | `mongodb://127.0.0.1:27017/staffsync` |
-| `JWT_SECRET` | Secret for signing tokens (Phase 4) — long and random | generate with the command below |
+| `JWT_SECRET` | Secret for signing tokens — at least 32 characters; the server refuses to start without it | generate with the command below |
 | `JWT_EXPIRES_IN` | Token lifetime | `1d` |
 | `CLIENT_URL` | Frontend origin(s) allowed by CORS, comma-separated | `http://localhost:5173` |
 
@@ -118,7 +118,7 @@ npm run dev
 # → MongoDB connected: <host>/<database>
 # → StaffSync API listening on http://localhost:5000 (development)
 # → CORS allowed origins: http://localhost:5173
-# → Mounted routes: /api/health
+# → Mounted routes: /api/health, /api/auth
 
 # Terminal 2 — frontend
 cd client
@@ -234,6 +234,9 @@ const getExample = async (req, res) => {
 | Method | URL | Auth | Role | Success | Errors |
 |---|---|---|---|---|---|
 | GET | `/api/health` | No | – | 200 | – |
+| POST | `/api/auth/register` | No | – (always creates an employee) | 201 | 400, 409 |
+| POST | `/api/auth/login` | No | – | 200 | 400, 401 |
+| GET | `/api/auth/me` | Yes | any | 200 | 401 |
 
 More endpoints are added and documented phase by phase; the full planned list is in [docs/PHASE-0-REQUIREMENTS.md](docs/PHASE-0-REQUIREMENTS.md#5-api-endpoint-list).
 
@@ -256,6 +259,72 @@ Reports that the API is alive and the current MongoDB connection state.
 
 `database` is one of `connected`, `connecting`, `disconnected`, `disconnecting`.
 
+### Authentication
+
+Send the token from register or login on every protected request:
+
+```
+Authorization: Bearer <token>
+```
+
+Tokens last `JWT_EXPIRES_IN` (default `1d`) and contain only the user's id. Role and active status are read from the database on every request, so if HR deactivates someone or changes their role, it applies straight away, even to tokens already issued.
+
+| Response | Meaning |
+|---|---|
+| 401 `Not authenticated. Please log in.` | No `Authorization: Bearer …` header |
+| 401 `Invalid token. Please log in again.` | Token malformed, tampered with or signed with another secret |
+| 401 `Your session has expired. Please log in again.` | Token past its expiry |
+| 401 `The account for this token no longer exists.` | User deleted |
+| 401 `This account has been deactivated.` | User deactivated by HR |
+
+### POST /api/auth/register
+
+Public sign-up. **Always creates an `employee`**: any `role` or other extra field in the body is ignored. Manager and HR accounts are created by HR (Phase 6).
+
+```json
+{ "name": "Asha Kumar", "email": "asha@example.com", "password": "Passw0rd123" }
+```
+
+| Field | Rules |
+|---|---|
+| `name` | Required, up to 100 characters |
+| `email` | Required, valid email; stored lower-case |
+| `password` | 8 characters to 72 bytes, at least one letter and one number |
+
+The 72-byte limit exists because bcrypt ignores anything after it.
+
+The account and an employee profile are created together in one transaction. The profile's department and designation start as `Unassigned` until HR updates them.
+
+**201**
+
+```json
+{
+  "success": true,
+  "message": "Registration successful",
+  "data": {
+    "token": "eyJhbGciOi…",
+    "user": { "_id": "…", "name": "Asha Kumar", "email": "asha@example.com", "role": "employee", "isActive": true, "createdAt": "…", "updatedAt": "…" },
+    "employee": { "_id": "…", "userId": "…", "employeeId": "EMP0001", "department": "Unassigned", "designation": "Unassigned", "managerId": null, "joiningDate": "…" }
+  }
+}
+```
+
+**400** `Validation failed` with `errors` · **409** `An account with this email already exists`
+
+### POST /api/auth/login
+
+```json
+{ "email": "asha@example.com", "password": "Passw0rd123" }
+```
+
+**200** `Login successful` with `data: { token, user }`.
+
+**401** `Invalid email or password` for both an unknown email and a wrong password, and both take the same time, so neither reveals whether an account exists. A deactivated account gets **401** `This account has been deactivated. Contact HR.`, but only once the correct password has been given.
+
+### GET /api/auth/me
+
+Requires a token. **200** `Current user` with `data: { user, employee }`.
+
 ## CORS configuration
 
 The API only accepts browser requests from origins listed in `CLIENT_URL`.
@@ -264,7 +333,7 @@ The API only accepts browser requests from origins listed in `CLIENT_URL`.
 - Production: set it to your deployed frontend, e.g. `CLIENT_URL=https://staffsync.example.com`
 - Both: `CLIENT_URL=http://localhost:5173,https://staffsync.example.com`
 
-Requests from other origins receive **403** `Origin … is not allowed by CORS`. Tools such as Postman and curl send no `Origin` header, so they are unaffected — CORS is a browser protection, not authentication (that arrives in Phase 4).
+Requests from other origins receive **403** `Origin … is not allowed by CORS`. Tools such as Postman and curl send no `Origin` header, so they are unaffected — CORS is a browser protection, not authentication.
 
 Symptom of a CORS misconfiguration: the request works in Postman but the browser console shows *"blocked by CORS policy"*. Check that `CLIENT_URL` exactly matches the address in your browser bar (scheme, host and port, no trailing slash), then restart the server.
 
@@ -274,14 +343,34 @@ Symptom of a CORS misconfiguration: the request works in Postman but the browser
 2. Select the **StaffSync Local** environment (top right).
 3. Open the collection, choose **Run collection**, and run it with the backend started.
 
-Every request carries automated assertions. Expected Phase 1 result: **4 requests, 11 assertions, 0 failures**.
+Every request carries automated assertions. Expected result: **18 requests, 61 assertions, 0 failures**.
+
+**00 Health**
 
 | Request | Expected |
 |---|---|
-| Health check | 200, `success: true`, message `StaffSync API is running` |
+| Health check | 200, `success: true`, `database: connected` |
 | Unknown route | 404, `success: false`, message names the route |
 | Malformed JSON body | 400, `Request body contains invalid JSON` |
 | Disallowed CORS origin | 403, `success: false` |
+
+**01 Auth** (run in order; register and login save `employeeToken` to the environment)
+
+| Request | Expected |
+|---|---|
+| Register employee | 201, token, role `employee`, `EMP…` profile, no password in response |
+| Register ignores role field | 201, role still `employee` although `"role": "hr"` was sent |
+| Register duplicate email | 409 |
+| Register missing fields | 400, errors for name, email and password |
+| Register weak password | 400, password not echoed back |
+| Login | 200, token |
+| Login email is case-insensitive | 200 |
+| Login wrong password / unknown email | 401, same `Invalid email or password` |
+| Login with operator injection (`{ "$gt": "" }`) | 400 |
+| Get current user | 200, user and `Unassigned` employee profile |
+| Get current user without token / invalid token / wrong scheme | 401 |
+
+Each run registers two new `postman+<timestamp>@staffsync.test` accounts in your database, so the collection can be re-run. Delete them from Atlas whenever you like.
 
 From the command line (no Postman install needed):
 
@@ -305,7 +394,8 @@ npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/St
 
 ## Known limitations (current phase)
 
-- Models exist but no endpoints write to them yet (Phase 4 onwards).
-- Password hashing arrives with authentication in Phase 4.
-- No authentication yet (Phase 4).
+- Logged-in users are authenticated, but role checks (`authorize`) arrive in Phase 5.
+- No HR account exists yet; the seed script for the first one arrives in Phase 6.
+- No rate limiting on login yet (security hardening, Phase 15).
+- No logout endpoint: tokens are stateless, so the client logs out by discarding the token. Deactivating a user blocks their tokens immediately.
 - The frontend is a single connection-check page; routing and role dashboards arrive in Phases 12–13.
