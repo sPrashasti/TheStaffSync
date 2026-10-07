@@ -15,6 +15,12 @@ const attendanceSchema = new mongoose.Schema(
       required: [true, 'Date is required'],
       match: [/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'],
     },
+    // The time zone `date` was worked out in, kept so the record still makes sense if the
+    // employee's time zone changes later.
+    timeZone: {
+      type: String,
+      required: [true, 'Time zone is required'],
+    },
     checkIn: {
       type: Date,
       required: [true, 'Check-in time is required'],

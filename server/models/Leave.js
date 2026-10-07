@@ -52,8 +52,19 @@ const leaveSchema = new mongoose.Schema(
       maxlength: [500, 'Rejection reason cannot exceed 500 characters'],
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    // Include `days` in responses, without Mongoose's duplicate `id` virtual.
+    id: false,
+    toJSON: { virtuals: true },
+  }
 );
+
+// Calendar days covered, counting both the start and end day.
+leaveSchema.virtual('days').get(function days() {
+  if (!this.startDate || !this.endDate) return undefined;
+  return Math.round((this.endDate - this.startDate) / 864e5) + 1;
+});
 
 leaveSchema.index({ employeeId: 1, status: 1 });
 leaveSchema.index({ status: 1, createdAt: -1 });

@@ -15,7 +15,7 @@ const withManager = {
 };
 
 const USER_UPDATE_FIELDS = ['name', 'email', 'role', 'isActive'];
-const EMPLOYEE_UPDATE_FIELDS = ['department', 'designation', 'joiningDate', 'dateOfBirth', 'managerId', 'phone', 'address'];
+const EMPLOYEE_UPDATE_FIELDS = ['department', 'designation', 'joiningDate', 'dateOfBirth', 'managerId', 'timeZone', 'phone', 'address'];
 // The only fields people other than HR may change, and only on their own record.
 const SELF_EDITABLE_FIELDS = ['phone', 'address'];
 

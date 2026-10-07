@@ -3,7 +3,7 @@ const Employee = require('../models/Employee');
 const AppError = require('../utils/AppError');
 const { sendSuccess, sendCreated } = require('../utils/apiResponse');
 const { getPagination, buildPage } = require('../utils/pagination');
-const { toDateString } = require('../utils/dates');
+const { toDateString, employeeTimeZone } = require('../utils/dates');
 
 // Fewer hours than this between check-in and check-out counts as a half day.
 const FULL_DAY_MIN_HOURS = 4;
@@ -32,13 +32,16 @@ const sendPage = async (res, message, filter, query, populate) => {
 
 const sameIds = (ids, id) => ids.some((x) => x.equals(id));
 
-// POST /api/attendance/check-in — any role. Time and date come from the server.
+// POST /api/attendance/check-in — any role. Time comes from the server; the date is today
+// in the employee's own time zone (or the company default).
 const checkIn = async (req, res) => {
   const now = new Date();
+  const timeZone = employeeTimeZone(req.employee);
   try {
     const record = await Attendance.create({
       employeeId: req.employee._id,
-      date: toDateString(now),
+      date: toDateString(now, timeZone),
+      timeZone,
       checkIn: now,
     });
     sendCreated(res, { message: 'Checked in', data: record });
@@ -52,7 +55,8 @@ const checkIn = async (req, res) => {
 // POST /api/attendance/check-out — any role.
 const checkOut = async (req, res) => {
   const now = new Date();
-  const record = await Attendance.findOne({ employeeId: req.employee._id, date: toDateString(now) });
+  const date = toDateString(now, employeeTimeZone(req.employee));
+  const record = await Attendance.findOne({ employeeId: req.employee._id, date });
   if (!record) throw new AppError('You have not checked in today', 404);
   if (record.checkOut) throw new AppError('You have already checked out today', 409);
 
@@ -68,11 +72,13 @@ const checkOut = async (req, res) => {
   sendSuccess(res, { message: 'Checked out', data: updated });
 };
 
-// GET /api/attendance/today — any role. Today's date and record (null if not checked in).
+// GET /api/attendance/today — any role. Today's date in the employee's time zone, that zone,
+// and today's record (null if not checked in).
 const getToday = async (req, res) => {
-  const date = toDateString();
+  const timeZone = employeeTimeZone(req.employee);
+  const date = toDateString(new Date(), timeZone);
   const record = await Attendance.findOne({ employeeId: req.employee._id, date });
-  sendSuccess(res, { message: 'Today', data: { date, record } });
+  sendSuccess(res, { message: 'Today', data: { date, timeZone, record } });
 };
 
 // GET /api/attendance/my — any role. Own history.

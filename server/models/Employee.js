@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Counter = require('./Counter');
+const { isValidTimeZone } = require('../utils/dates');
 
 const employeeSchema = new mongoose.Schema(
   {
@@ -45,6 +46,17 @@ const employeeSchema = new mongoose.Schema(
       type: String,
       trim: true,
       maxlength: [300, 'Address cannot exceed 300 characters'],
+    },
+    // IANA time zone (e.g. Europe/London) that decides this employee's attendance and leave dates.
+    // null means the company default (TIMEZONE). Set by HR only.
+    timeZone: {
+      type: String,
+      default: null,
+      trim: true,
+      validate: {
+        validator: (value) => value === null || isValidTimeZone(value),
+        message: 'Time zone must be a valid IANA name, e.g. Asia/Kolkata',
+      },
     },
     dateOfBirth: {
       type: Date,

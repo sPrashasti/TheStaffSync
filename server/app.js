@@ -7,6 +7,7 @@ const healthRoutes = require('./routes/healthRoutes');
 const authRoutes = require('./routes/authRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
 const attendanceRoutes = require('./routes/attendanceRoutes');
+const leaveRoutes = require('./routes/leaveRoutes');
 
 const app = express();
 
@@ -21,6 +22,7 @@ const routes = [
   ['/api/auth', authRoutes],
   ['/api/employees', employeeRoutes],
   ['/api/attendance', attendanceRoutes],
+  ['/api/leaves', leaveRoutes],
 ];
 routes.forEach(([path, router]) => app.use(path, router));
 

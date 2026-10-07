@@ -1,6 +1,7 @@
 const { body, checkExact, query } = require('express-validator');
 const { ROLES } = require('../models/User');
 const { emailRule, newPasswordRule } = require('./authValidators');
+const { isValidTimeZone } = require('../utils/dates');
 
 const listEmployeesRules = [
   query('department')
@@ -60,6 +61,12 @@ const employmentFieldRules = (required) => [
   body('managerId')
     .optional({ values: 'null' })
     .isMongoId().withMessage('managerId must be a valid id'),
+  // null means "use the company default".
+  body('timeZone')
+    .optional({ values: 'null' })
+    .isString().withMessage('Time zone must be text')
+    .trim()
+    .custom(isValidTimeZone).withMessage('Time zone must be a valid IANA name, e.g. Asia/Kolkata or Europe/London'),
 ];
 
 // Only body fields are checked for unknown names; :id and query strings are validated separately.

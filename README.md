@@ -16,8 +16,9 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | 5 | Role-based access control, seed script, employee read endpoints | ✅ Complete |
 | 6 | Employee management (create, update, deactivate) | ✅ Complete |
 | 7 | Attendance (check-in, check-out, history) | ✅ Complete |
-| 8 | Leave management (apply, approve, reject) | ⏳ Next |
-| 9–11 | Backend modules (HR, announcements, training, notifications) | Planned |
+| 8 | Leave management (apply, approve, reject) | ✅ Complete |
+| 9 | HR dashboards and reports | ⏳ Next |
+| 10–11 | Backend modules (announcements, training, notifications) | Planned |
 | 12–13 | Frontend integration + dashboards | Planned |
 | 14–18 | Testing, security hardening, optimisation, deployment | Planned |
 
@@ -100,7 +101,7 @@ npm run seed:demo     # optional: also a demo manager with a team, for testing
 | `JWT_SECRET` | Secret for signing tokens — at least 32 characters; the server refuses to start without it | generate with the command below |
 | `JWT_EXPIRES_IN` | Token lifetime | `1d` |
 | `CLIENT_URL` | Frontend origin(s) allowed by CORS, comma-separated | `http://localhost:5173` |
-| `TIMEZONE` | Company time zone (IANA name) that decides which day a check-in belongs to; the server will not start with an invalid one | `Europe/London` (default) |
+| `TIMEZONE` | Company **default** time zone (IANA name) for attendance and leave dates. HR can give individual employees their own (see *Time zones*). The server will not start with an invalid one | `Asia/Kolkata` (IST, the default if unset) |
 | `SEED_HR_NAME` | Name of the first HR account (seed script only) | `StaffSync HR` |
 | `SEED_HR_EMAIL` | Email of the first HR account | `hr@example.com` |
 | `SEED_HR_PASSWORD` | Its password: 8+ characters with a letter and a number | — |
@@ -133,8 +134,8 @@ npm run dev
 # → MongoDB connected: <host>/<database>
 # → StaffSync API listening on http://localhost:5000 (development)
 # → CORS allowed origins: http://localhost:5173
-# → Attendance time zone: Europe/London
-# → Mounted routes: /api/health, /api/auth, /api/employees, /api/attendance
+# → Default time zone: Asia/Kolkata
+# → Mounted routes: /api/health, /api/auth, /api/employees, /api/attendance, /api/leaves
 
 # Terminal 2 — frontend
 cd client
@@ -266,6 +267,13 @@ const getExample = async (req, res) => {
 | GET | `/api/attendance/my` | Yes | any | 200 | 400, 401 |
 | GET | `/api/attendance/team` | Yes | manager | 200 | 400, 401, 403 |
 | GET | `/api/attendance` | Yes | hr | 200 | 400, 401, 403 |
+| POST | `/api/leaves` | Yes | employee, manager | 201 | 400, 401, 403, 409 |
+| GET | `/api/leaves/my` | Yes | any | 200 | 400, 401 |
+| GET | `/api/leaves/team` | Yes | manager | 200 | 400, 401, 403 |
+| GET | `/api/leaves` | Yes | hr | 200 | 400, 401, 403 |
+| GET | `/api/leaves/:id` | Yes | applicant, their manager, hr | 200 | 400, 401, 403, 404 |
+| PUT | `/api/leaves/:id/approve` | Yes | applicant's manager, hr | 200 | 400, 401, 403, 404, 409 |
+| PUT | `/api/leaves/:id/reject` | Yes | applicant's manager, hr | 200 | 400, 401, 403, 404, 409 |
 
 More endpoints are added and documented phase by phase; the full planned list is in [docs/PHASE-0-REQUIREMENTS.md](docs/PHASE-0-REQUIREMENTS.md#5-api-endpoint-list).
 
@@ -422,6 +430,7 @@ Creates the login account and the employee profile together, in one transaction.
 | `managerId` | Employee `_id` of an **active manager** |
 | `phone` | 7–20 digits, spaces, `-`, optional leading `+` |
 | `address` | Up to 300 characters |
+| `timeZone` | IANA name such as `Europe/London`; omit or `null` for the company default (see *Time zones*) |
 
 Any other field, such as `isActive` or `employeeId`, is rejected with **400** `Unknown field`. **201** `Employee created` · **409** if the email is taken.
 
@@ -429,7 +438,7 @@ Any other field, such as `isActive` or `employeeId`, is rejected with **400** `U
 
 Send only the fields to change. `null` clears `phone`, `address`, `dateOfBirth` or `managerId`.
 
-- **HR** may change `name`, `email`, `role`, `isActive` and every profile field above. Passwords cannot be changed here.
+- **HR** may change `name`, `email`, `role`, `isActive` and every profile field above, including `timeZone`. Passwords cannot be changed here.
 - **Anyone else** may change only their **own** `phone` and `address`. Sending another field gives **403** `You can only update your own phone and address`, with the disallowed fields listed in `errors`, and nothing is saved.
 
 ### DELETE /api/employees/:id (hr)
@@ -449,7 +458,7 @@ Send only the fields to change. `null` clears `phone`, `address`, `dateOfBirth` 
 
 ### Attendance
 
-- **The server decides the date and time.** "Today" is the calendar day in `TIMEZONE` (default `Europe/London`). Check-in and check-out take no body; sending fields such as `checkIn` or `date` gives **400** `Unknown field`.
+- **The server decides the date and time.** "Today" is the calendar day in the employee's time zone (see *Time zones*). Check-in and check-out take no body; sending fields such as `checkIn` or `date` gives **400** `Unknown field`. Each record stores the `timeZone` its date was worked out in.
 - **One record per employee per day.** A unique database index blocks a second check-in, even if two requests arrive at the same moment.
 - **Check-out happens once.** It records `checkOut` and `workingHours` (to two decimal places). It sets `status` to `half-day` for under 4 hours, otherwise `present`.
 - **Check-out must be on the same calendar day as check-in.** Night shifts that cross midnight are not supported.
@@ -458,7 +467,7 @@ Send only the fields to change. `null` clears `phone`, `address`, `dateOfBirth` 
 |---|---|
 | `POST /check-in` | **201** `Checked in` · **409** `You have already checked in today` |
 | `POST /check-out` | **200** `Checked out` · **404** `You have not checked in today` · **409** `You have already checked out today` |
-| `GET /today` | **200** `data: { date, record }`, where `record` is `null` before check-in. Use it to show check-in status on a dashboard |
+| `GET /today` | **200** `data: { date, timeZone, record }`, where `record` is `null` before check-in. Use it to show check-in status on a dashboard |
 
 **History endpoints** are paginated (`data: { items, page, limit, total, totalPages }`) and newest first. They all accept either `?date=YYYY-MM-DD` or `?from=&to=` (either end optional), plus `page` and `limit`. Unknown query parameters give **400**.
 
@@ -469,6 +478,68 @@ Send only the fields to change. `null` clears `phone`, `address`, `dateOfBirth` 
 | `GET /api/attendance` | hr | `employeeId`, `department`, `status` (`present`, `half-day`, `absent`) |
 
 Team and HR results include `employeeId: { employeeId, department, designation, userId: { name, email } }`.
+
+### Time zones
+
+Dates for attendance and leave ("which day is today?") are always worked out on the server:
+
+1. **Company default:** `TIMEZONE` in `server/.env`, **`Asia/Kolkata` (IST)** if unset.
+2. **Per employee:** HR can give an employee their own zone, for example someone working from the UK:
+
+   ```
+   PUT /api/employees/:id   { "timeZone": "Europe/London" }
+   PUT /api/employees/:id   { "timeZone": null }            ← back to the company default
+   ```
+
+   That employee's check-in day, check-out and "leave cannot start in the past" rule then follow their own calendar.
+
+- Only HR can set an employee's zone. Employees cannot change their own, which stops anyone moving a check-in to a different day.
+- Any IANA name is accepted (`Asia/Kolkata`, `Europe/London`, `America/New_York`, `UTC`…). An invalid name gives **400**.
+- `timeZone: null` on an employee means "company default". `GET /api/attendance/today` returns the zone actually in use.
+- Changing `TIMEZONE` needs a server restart. `npm run dev` restarts on code changes and re-reads `.env` then, but not when only `.env` changes.
+- Times (`checkIn`, `checkOut`, `createdAt`) are always returned in UTC (`…Z`). Showing them in the viewer's local time is the frontend's job.
+
+### Leave
+
+**Apply**: `POST /api/leaves` (employees and managers; HR cannot apply):
+
+```json
+{ "leaveType": "casual", "startDate": "2026-10-20", "endDate": "2026-10-22", "reason": "Family wedding" }
+```
+
+| Field / rule | Response if broken |
+|---|---|
+| `leaveType`: `casual`, `sick`, `earned` or `unpaid` | 400 |
+| `startDate`, `endDate`: real dates, `YYYY-MM-DD`, end not before start | 400 |
+| `reason`: 1–500 characters | 400 |
+| Cannot start in the past, judged by the applicant's own time zone (today is fine). **Sick** leave may start up to **30 days** back | 400 |
+| At most **60 calendar days** per request | 400 |
+| Cannot overlap your own **pending or approved** leave; rejected leave does not count | 409 `These dates overlap your pending casual leave` |
+| Any other field (e.g. `status`) | 400 `Unknown field` |
+
+**201** `Leave request submitted`, `status: "pending"`. Every leave response includes `days`, the number of calendar days counting both ends. Dates come back as `2026-10-20T00:00:00.000Z`.
+
+Overlap checking runs inside a transaction, so two overlapping requests sent at the same moment cannot both be accepted.
+
+**Approve / reject**: `PUT /api/leaves/:id/approve` takes no body. `PUT /api/leaves/:id/reject` takes `{ "rejectionReason": "…" }`, which is required, 1–500 characters.
+
+| Rule | Response |
+|---|---|
+| HR may decide any request; a manager only requests from their **direct reports** | 403 `This leave request is not from your team` |
+| Nobody can decide their own leave. A manager's leave goes to their own manager or HR | 403 `You cannot approve or reject your own leave` |
+| Only `pending` requests can be decided, once. Simultaneous approve/reject: exactly one wins | 409 `This leave request has already been approved` (or `rejected`) |
+
+**200** `Leave approved` / `Leave rejected`, with `approvedBy: { name, email, role }` recording who decided. That field is used for both approvals and rejections.
+
+**Lists** are paginated and newest first. They accept `status`, `leaveType`, and `from`/`to` (returns leave that **overlaps** that period).
+
+| Endpoint | Who | Extra filters |
+|---|---|---|
+| `GET /api/leaves/my` | any | none; always your own |
+| `GET /api/leaves/team` | manager | `employeeId` (direct report only, otherwise 403). `?status=pending` is the approval queue |
+| `GET /api/leaves` | hr | `employeeId`, `department` |
+
+`GET /api/leaves/:id` is allowed for the applicant, their direct manager and HR.
 
 ## CORS configuration
 
@@ -489,7 +560,7 @@ Symptom of a CORS misconfiguration: the request works in Postman but the browser
 3. Click the environment's eye icon and fill in **hrPassword** and **managerPassword**. These are `SEED_HR_PASSWORD` and `SEED_DEMO_PASSWORD` from `server/.env`. Run `npm run seed:demo` first if you haven't. The passwords stay in your local Postman only; the committed environment file leaves them blank.
 4. Open the collection, choose **Run collection**, and run it with the backend started.
 
-Every request carries automated assertions. Expected result: **84 requests, 225 assertions, 0 failures**.
+Every request carries automated assertions. Expected result: **118 requests, 297 assertions, 0 failures**.
 
 **00 Health**
 
@@ -553,6 +624,7 @@ It only touches `postman+…@staffsync.test` accounts and refuses to run when `N
 | Employee changes own department or role | 403, fields listed, nothing saved |
 | Employee edits someone else | 403 |
 | HR updates employment details | 200 |
+| HR sets an employee time zone / invalid zone / employee changes own zone / HR resets to default | 200 / 400 / 403 / 200 `null` |
 | Manager as own manager | 400 |
 | Demote a manager who has a team | 409 |
 | HR deactivates own account | 400 |
@@ -575,6 +647,26 @@ It only touches `postman+…@staffsync.test` accounts and refuses to run when `N
 | Employee or manager views team/all where not allowed | 403 |
 | Check in without token | 401 |
 
+**05 Leaves** (creates one `postman+leave<timestamp>@staffsync.test` employee per run in the demo manager's team; dates are calculated from today so the run works on any day)
+
+| Request | Expected |
+|---|---|
+| Employee applies | 201 `pending`, 3 days |
+| Overlapping request / end before start / casual in the past / `status` in body / invalid type | 409 / 400 / 400 / 400 / 400 |
+| HR applies | 403 |
+| Second request; request from an employee outside the team | 201 |
+| Employee's own pending list; manager's `?status=pending` queue | both contain the request; outside request not in the manager's queue |
+| Owner and manager view by id / other employee / unknown id | 200 / 403 / 404 |
+| Employee approves / manager approves outside team | 403 |
+| **Manager approves team leave** | 200 `approved`, approver recorded |
+| Approve again / reject an approved request | 409 |
+| Reject without reason / with reason | 400 / 200 `rejected` with reason |
+| **Employee sees the outcomes** | first `approved`, second `rejected` with reason |
+| Rejected dates requested again | 201 |
+| **HR sees the same approved record** | same status and approver |
+| HR approves a request from outside any team | 200 |
+| Manager lists all / employee lists team | 403 |
+
 From the command line (no Postman install needed):
 
 ```bash
@@ -596,8 +688,10 @@ npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/St
 | `Seed failed: … is not set` | Add the `SEED_*` variables to `server/.env` |
 | 400 `Unknown field` | The request body has a field that endpoint does not accept; check the field name or remove it |
 | 409 `Reassign this manager's … team member(s)…` | Move their reports to another manager with `PUT /api/employees/:id { "managerId": … }` first |
-| `TIMEZONE "…" is not a valid IANA time zone` | Use a name such as `Europe/London` or `Asia/Kolkata` in `server/.env` |
-| 404 `You have not checked in today` at check-out | No check-in exists for today in the company time zone, e.g. checked in before midnight |
+| `TIMEZONE "…" is not a valid IANA time zone` | Use a name such as `Asia/Kolkata` or `Europe/London` in `server/.env` |
+| 409 `These dates overlap your …` | You already have pending or approved leave on some of those days |
+| 403 `This leave request is not from your team` | Only the applicant's direct manager (or HR) can decide it |
+| 404 `You have not checked in today` at check-out | No check-in exists for today in that employee's time zone, e.g. checked in before midnight, or HR changed their zone in between |
 | `Port 5000 is already in use` | Another process (or a second server terminal) is using the port — stop it or change `PORT` |
 | Page says "Unable to reach the server" | Backend not running, or `VITE_API_URL` wrong — restart Vite after editing `client/.env` |
 | `VITE_API_URL is not set` error in the browser | `client/.env` missing |
@@ -608,6 +702,9 @@ npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/St
 - No password change or reset endpoint yet.
 - Attendance has no "absent" records yet; days without a check-in simply have no record. Reports (Phase 9) will count them.
 - Check-in and check-out must fall on the same calendar day.
+- Leave counts calendar days (weekends and public holidays included), and there are no leave balances or allowances yet.
+- Employees cannot cancel a leave request yet.
+- No notifications are sent for leave decisions yet (Phase 11).
 - No rate limiting on login yet (security hardening, Phase 15).
 - No logout endpoint: tokens are stateless, so the client logs out by discarding the token. Deactivating a user blocks their tokens immediately.
 - The frontend is a single connection-check page; routing and role dashboards arrive in Phases 12–13.

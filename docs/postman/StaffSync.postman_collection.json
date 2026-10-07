@@ -1627,6 +1627,142 @@
           }
         },
         {
+          "name": "HR sets employee time zone",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('time zone saved', () => pm.expect(body.data.timeZone).to.eql('Europe/London'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/{{newEmployeeId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"timeZone\": \"Europe/London\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Invalid time zone returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('timeZone error', () => pm.expect(body.errors[0].field).to.eql('timeZone'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/{{newEmployeeId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"timeZone\": \"Mars/Base\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Employee cannot change own time zone",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('timeZone listed', () => pm.expect(body.errors).to.deep.include({ field: 'timeZone', message: 'Only HR can change this field' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{newEmployeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/{{newEmployeeId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"timeZone\": \"Asia/Kolkata\"\n}"
+            }
+          }
+        },
+        {
+          "name": "HR resets time zone to company default",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('back to default (null)', () => pm.expect(body.data.timeZone).to.eql(null));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/{{newEmployeeId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"timeZone\": null\n}"
+            }
+          }
+        },
+        {
           "name": "Manager cannot be their own manager",
           "event": [
             {
@@ -1919,7 +2055,8 @@
                   "pm.test('Status is 200', () => pm.response.to.have.status(200));",
                   "pm.test('no record yet', () => pm.expect(body.data.record).to.eql(null));",
                   "pm.test('server date returned', () => pm.expect(body.data.date).to.match(/^\\d{4}-\\d{2}-\\d{2}$/));",
-                  "pm.environment.set('attDate', body.data.date);"
+                  "pm.environment.set('attDate', body.data.date);",
+                  "pm.test('company default zone (IST) used', () => pm.expect(body.data.timeZone).to.eql('Asia/Kolkata'));"
                 ]
               }
             }
@@ -2007,7 +2144,8 @@
                   "pm.test('Status is 201', () => pm.response.to.have.status(201));",
                   "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Checked in\"));",
                   "pm.test('dated today', () => pm.expect(body.data.date).to.eql(pm.environment.get('attDate')));",
-                  "pm.test('checked in, not out', () => { pm.expect(body.data.checkIn).to.be.a('string'); pm.expect(body.data.checkOut).to.eql(null); });"
+                  "pm.test('checked in, not out', () => { pm.expect(body.data.checkIn).to.be.a('string'); pm.expect(body.data.checkOut).to.eql(null); });",
+                  "pm.test('zone stored on record', () => pm.expect(body.data.timeZone).to.eql('Asia/Kolkata'));"
                 ]
               }
             }
@@ -2489,6 +2627,931 @@
             "method": "POST",
             "header": [],
             "url": "{{baseUrl}}/attendance/check-in"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Leaves",
+      "item": [
+        {
+          "name": "HR creates leave test employee",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('leaveEmail', 'postman+leave' + Date.now() + '@staffsync.test');",
+                  "// Future dates relative to today, so the requests are valid on any day the collection runs.",
+                  "const day = (n) => { const d = new Date(); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };",
+                  "pm.environment.set('leaveStart', day(14));",
+                  "pm.environment.set('leaveEnd', day(16));",
+                  "pm.environment.set('leaveOverlapEnd', day(18));",
+                  "pm.environment.set('leave2Date', day(30));",
+                  "pm.environment.set('pastDate', day(-5));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Leave\",\n  \"email\": \"{{leaveEmail}}\",\n  \"password\": \"Passw0rd123\",\n  \"department\": \"Engineering\",\n  \"designation\": \"Engineer\",\n  \"managerId\": \"{{managerEmployeeId}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Leave employee logs in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.environment.set('leaveToken', body.data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{leaveEmail}}\",\n  \"password\": \"Passw0rd123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Employee applies for leave",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Leave request submitted\"));",
+                  "pm.test('pending', () => pm.expect(body.data.status).to.eql('pending'));",
+                  "pm.test('3 days', () => pm.expect(body.data.days).to.eql(3));",
+                  "pm.environment.set('leaveId', body.data._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leaveType\": \"casual\",\n  \"startDate\": \"{{leaveStart}}\",\n  \"endDate\": \"{{leaveEnd}}\",\n  \"reason\": \"Family event\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Overlapping request returns 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"These dates overlap your pending casual leave\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leaveType\": \"earned\",\n  \"startDate\": \"{{leaveEnd}}\",\n  \"endDate\": \"{{leaveOverlapEnd}}\",\n  \"reason\": \"Family event\"\n}"
+            }
+          }
+        },
+        {
+          "name": "End before start returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('endDate: End date cannot be before start date', () => pm.expect(body.errors).to.deep.include({ field: 'endDate', message: \"End date cannot be before start date\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leaveType\": \"casual\",\n  \"startDate\": \"{{leaveEnd}}\",\n  \"endDate\": \"{{leaveStart}}\",\n  \"reason\": \"Family event\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Casual leave in the past returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('startDate: Leave cannot start in the past', () => pm.expect(body.errors).to.deep.include({ field: 'startDate', message: \"Leave cannot start in the past\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leaveType\": \"casual\",\n  \"startDate\": \"{{pastDate}}\",\n  \"endDate\": \"{{pastDate}}\",\n  \"reason\": \"Family event\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Sending status returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('status: Unknown field', () => pm.expect(body.errors).to.deep.include({ field: 'status', message: \"Unknown field\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leaveType\": \"casual\",\n  \"startDate\": \"{{leave2Date}}\",\n  \"endDate\": \"{{leave2Date}}\",\n  \"reason\": \"x\",\n  \"status\": \"approved\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Invalid leave type returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('leaveType: Leave type must be one of: casual, sick, earned, unpaid', () => pm.expect(body.errors).to.deep.include({ field: 'leaveType', message: \"Leave type must be one of: casual, sick, earned, unpaid\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leaveType\": \"holiday\",\n  \"startDate\": \"{{leave2Date}}\",\n  \"endDate\": \"{{leave2Date}}\",\n  \"reason\": \"Family event\"\n}"
+            }
+          }
+        },
+        {
+          "name": "HR cannot apply for leave",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leaveType\": \"casual\",\n  \"startDate\": \"{{leave2Date}}\",\n  \"endDate\": \"{{leave2Date}}\",\n  \"reason\": \"Family event\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Employee applies for second leave",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.environment.set('leave2Id', body.data._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leaveType\": \"earned\",\n  \"startDate\": \"{{leave2Date}}\",\n  \"endDate\": \"{{leave2Date}}\",\n  \"reason\": \"Personal day\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Employee outside the team applies",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.environment.set('outsideLeaveId', body.data._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leaveType\": \"casual\",\n  \"startDate\": \"{{leaveStart}}\",\n  \"endDate\": \"{{leaveStart}}\",\n  \"reason\": \"Appointment\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Employee sees own pending leave",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('both requests pending', () => pm.expect(body.data.items.map((l) => l._id)).to.include.members([pm.environment.get('leaveId'), pm.environment.get('leave2Id')]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves/my?status=pending"
+          }
+        },
+        {
+          "name": "Manager sees request in team queue",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('request is in the queue', () => pm.expect(body.data.items.map((l) => l._id)).to.include(pm.environment.get('leaveId')));",
+                  "pm.test('outside request is not', () => pm.expect(body.data.items.map((l) => l._id)).to.not.include(pm.environment.get('outsideLeaveId')));",
+                  "pm.test('applicant details populated', () => pm.expect(body.data.items[0].employeeId.userId).to.include.keys('name', 'email'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves/team?status=pending"
+          }
+        },
+        {
+          "name": "Owner views leave by id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves/{{leaveId}}"
+          }
+        },
+        {
+          "name": "Manager views team leave by id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves/{{leaveId}}"
+          }
+        },
+        {
+          "name": "Other employee cannot view someone's leave",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves/{{leaveId}}"
+          }
+        },
+        {
+          "name": "Unknown leave id returns 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Leave request not found\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves/64b7f0000000000000000000"
+          }
+        },
+        {
+          "name": "Employee cannot approve",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves/{{leaveId}}/approve"
+          }
+        },
+        {
+          "name": "Manager cannot approve outside team",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"This leave request is not from your team\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves/{{outsideLeaveId}}/approve"
+          }
+        },
+        {
+          "name": "Manager approves team leave",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Leave approved\"));",
+                  "pm.test('approved', () => pm.expect(body.data.status).to.eql('approved'));",
+                  "pm.test('approver recorded', () => pm.expect(body.data.approvedBy.email).to.eql(pm.environment.get('managerEmail')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves/{{leaveId}}/approve"
+          }
+        },
+        {
+          "name": "Approving again returns 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"This leave request has already been approved\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves/{{leaveId}}/approve"
+          }
+        },
+        {
+          "name": "Rejecting an approved leave returns 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"This leave request has already been approved\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves/{{leaveId}}/reject",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rejectionReason\": \"Too late\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Reject without reason returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('rejectionReason: Rejection reason is required', () => pm.expect(body.errors).to.deep.include({ field: 'rejectionReason', message: \"Rejection reason is required\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves/{{leave2Id}}/reject",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Manager rejects with reason",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Leave rejected\"));",
+                  "pm.test('rejected with reason', () => { pm.expect(body.data.status).to.eql('rejected'); pm.expect(body.data.rejectionReason).to.eql('Release week; please pick another day'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves/{{leave2Id}}/reject",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rejectionReason\": \"Release week; please pick another day\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Employee sees the outcomes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const byId = Object.fromEntries(body.data.items.map((l) => [l._id, l]));",
+                  "pm.test('first approved', () => pm.expect(byId[pm.environment.get('leaveId')].status).to.eql('approved'));",
+                  "pm.test('second rejected with reason', () => { const l = byId[pm.environment.get('leave2Id')]; pm.expect(l.status).to.eql('rejected'); pm.expect(l.rejectionReason).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves/my"
+          }
+        },
+        {
+          "name": "Rejected dates can be requested again",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leaveType\": \"unpaid\",\n  \"startDate\": \"{{leave2Date}}\",\n  \"endDate\": \"{{leave2Date}}\",\n  \"reason\": \"Trying again\"\n}"
+            }
+          }
+        },
+        {
+          "name": "HR sees the same approved record",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const l = body.data.items.find((x) => x._id === pm.environment.get('leaveId'));",
+                  "pm.test('record present', () => pm.expect(l).to.be.an('object'));",
+                  "pm.test('same status and approver', () => { pm.expect(l.status).to.eql('approved'); pm.expect(l.approvedBy.email).to.eql(pm.environment.get('managerEmail')); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves?status=approved&department=Engineering"
+          }
+        },
+        {
+          "name": "HR approves request from outside any team",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('approved by HR', () => pm.expect(body.data.approvedBy.role).to.eql('hr'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves/{{outsideLeaveId}}/approve"
+          }
+        },
+        {
+          "name": "Manager cannot list all leave",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves"
+          }
+        },
+        {
+          "name": "Employee cannot view team leave",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves/team"
           }
         }
       ]
