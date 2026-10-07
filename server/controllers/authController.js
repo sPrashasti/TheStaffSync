@@ -5,6 +5,8 @@ const Employee = require('../models/Employee');
 const AppError = require('../utils/AppError');
 const { sendSuccess, sendCreated } = require('../utils/apiResponse');
 const { signToken } = require('../utils/token');
+const { isMailConfigured } = require('../utils/mailer');
+const passwordReset = require('../services/passwordResetService');
 
 // Department and designation until HR fills them in.
 const UNASSIGNED = 'Unassigned';
@@ -84,4 +86,28 @@ const changePassword = async (req, res) => {
   sendSuccess(res, { message: 'Password changed', data: { token: signToken(user._id) } });
 };
 
-module.exports = { register, login, getMe, changePassword };
+const RESET_REQUESTED = 'If an account exists for that email, a reset link has been sent.';
+
+// POST /api/auth/forgot-password — public. Always the same reply, sent before the lookup and
+// email happen, so neither the message nor the response time reveals whether the account exists.
+const forgotPassword = async (req, res) => {
+  if (process.env.NODE_ENV === 'production' && !isMailConfigured()) {
+    throw new AppError('Password reset by email is not available. Contact HR.', 503);
+  }
+  sendSuccess(res, { message: RESET_REQUESTED });
+
+  passwordReset.requestReset(req.body.email).catch((err) => {
+    console.error(`Password reset email failed: ${err.message}`);
+  });
+};
+
+// POST /api/auth/reset-password — public. Uses the token from the emailed link once.
+const resetPassword = async (req, res) => {
+  const ok = await passwordReset.resetPassword(req.body.token, req.body.newPassword);
+  if (!ok) {
+    throw new AppError('This reset link is invalid or has expired. Please request a new one.', 400);
+  }
+  sendSuccess(res, { message: 'Your password has been reset. Please log in.' });
+};
+
+module.exports = { register, login, getMe, changePassword, forgotPassword, resetPassword };

@@ -24,7 +24,7 @@ const setup = async (name) => {
   process.env.NODE_ENV = 'test';
   // Tests send many requests from one address, so limits are generous unless a test file (such as
   // security.test.js) has already set its own.
-  for (const [key, value] of [['RATE_LIMIT_MAX_REQUESTS', '100000'], ['LOGIN_MAX_FAILURES', '1000'], ['REGISTER_MAX_PER_HOUR', '1000']]) {
+  for (const [key, value] of [['RATE_LIMIT_MAX_REQUESTS', '100000'], ['LOGIN_MAX_FAILURES', '1000'], ['REGISTER_MAX_PER_HOUR', '1000'], ['FORGOT_PASSWORD_MAX_PER_HOUR', '1000'], ['RESET_PASSWORD_MAX_ATTEMPTS', '1000']]) {
     if (process.env[key] === undefined) process.env[key] = value;
   }
 

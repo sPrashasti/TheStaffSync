@@ -50,6 +50,7 @@ function LoginPage() {
   return (
     <AuthCard title="Log in" subtitle="One login for everyone. You will go straight to your HR, manager or employee dashboard.">
       <Stack component="form" spacing={2} onSubmit={submit} noValidate>
+        {location.state?.message && <Alert severity="success">{location.state.message}</Alert>}
         {notice && <Alert severity="info">{notice}</Alert>}
         {error && <Alert severity="error">{error}</Alert>}
         <TextField
@@ -75,6 +76,9 @@ function LoginPage() {
           helperText={fieldErrors.password}
           required
         />
+        <Typography variant="body2" textAlign="right" sx={{ mt: -1 }}>
+          <Link component={RouterLink} to="/forgot-password">Forgot password?</Link>
+        </Typography>
         <Button type="submit" variant="contained" size="large" disabled={submitting}>
           {submitting ? 'Logging in…' : 'Log in'}
         </Button>

@@ -572,6 +572,66 @@
             ],
             "url": "{{baseUrl}}/auth/me"
           }
+        },
+        {
+          "name": "Forgot password gives the same reply for any email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('generic message', () => pm.expect(body.message).to.eql('If an account exists for that email, a reset link has been sent.'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/forgot-password",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{unknownEmail}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Reset with an invalid link returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql('This reset link is invalid or has expired. Please request a new one.'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/reset-password",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\n  \"newPassword\": \"Reset1234!\"\n}"
+            }
+          }
         }
       ]
     },

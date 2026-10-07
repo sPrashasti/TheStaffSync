@@ -48,4 +48,27 @@ const changePasswordRules = [
   ),
 ];
 
-module.exports = { registerRules, loginRules, changePasswordRules, newPasswordRule, emailRule };
+// POST /api/auth/forgot-password
+const forgotPasswordRules = [checkExact([emailRule()], { locations: ['body'] })];
+
+// POST /api/auth/reset-password. Tokens are 64 hex characters.
+const resetPasswordRules = [
+  checkExact(
+    [
+      body('token').isString().withMessage('Reset token is required').bail()
+        .matches(/^[a-f0-9]{64}$/).withMessage('This reset link is not valid'),
+      newPasswordRule('newPassword'),
+    ],
+    { locations: ['body'] }
+  ),
+];
+
+module.exports = {
+  registerRules,
+  loginRules,
+  changePasswordRules,
+  forgotPasswordRules,
+  resetPasswordRules,
+  newPasswordRule,
+  emailRule,
+};

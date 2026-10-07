@@ -85,6 +85,18 @@ Tick each box as you go. If something does not match, note the step number, the 
 | E4 | Keyboard only: Tab through the login form and the leave dialog | A visible focus ring on every control; Enter submits |
 | E5 | Stop the API and refresh | "Can't reach StaffSync" with **Try again**, and you are not logged out |
 
+## F. Passwords
+
+| # | Role | Do this | You should see |
+|---|---|---|---|
+| F1 | Signed out | Login page → **Forgot password?**, enter `employee2@staffsync.demo` | "If an account exists for that email, a reset link has been sent." |
+| F2 | — | Look in the server terminal (or the inbox, if SMTP is set up) | An email "Reset your StaffSync password" with a link |
+| F3 | Signed out | Open the link, choose a new password | Back on the login page with "Your password has been reset. Please log in." |
+| F4 | Signed out | Open the same link again and submit | "This reset link is invalid or has expired…" |
+| F5 | Employee 2 | Log in with the new password | Works; the old password does not |
+| F6 | Any | My profile → **Change password** | "Password changed. Other devices have been signed out."; a second browser signed in as the same person is sent to the login page on its next action |
+| F7 | Signed out | Enter a wrong password 6 times for one account | From the 6th try: "Too many failed login attempts. Try again in 15 minutes." Other accounts still log in |
+
 ## When you finish
 
 - [ ] All of A passed (this is the acceptance test for the leave workflow)

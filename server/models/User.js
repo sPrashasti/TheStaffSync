@@ -37,6 +37,16 @@ const userSchema = new mongoose.Schema(
       type: Date,
       select: false,
     },
+    // Password reset by email: only a SHA-256 hash of the emailed token is stored, so a copy of
+    // the database cannot be used to reset anyone's password.
+    passwordResetTokenHash: {
+      type: String,
+      select: false,
+    },
+    passwordResetExpires: {
+      type: Date,
+      select: false,
+    },
     // Soft delete: deactivated users keep their history but cannot log in.
     isActive: {
       type: Boolean,
@@ -50,6 +60,8 @@ const userSchema = new mongoose.Schema(
       transform: (doc, ret) => {
         delete ret.password;
         delete ret.passwordChangedAt;
+        delete ret.passwordResetTokenHash;
+        delete ret.passwordResetExpires;
         return ret;
       },
     },

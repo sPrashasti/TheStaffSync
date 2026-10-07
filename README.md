@@ -114,6 +114,11 @@ npm run seed:demo     # optional: also a demo manager with a team, for testing
 | `JWT_SECRET` | Secret for signing tokens — at least 32 characters; the server refuses to start without it | generate with the command below |
 | `JWT_EXPIRES_IN` | Token lifetime | `1d` |
 | `CLIENT_URL` | Frontend origin(s) allowed by CORS, comma-separated | `http://localhost:5173` |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | Email server for "Forgot password" (any SMTP provider). Without `SMTP_HOST`, development prints the email in the server terminal and production replies that email reset is unavailable | Microsoft 365: `smtp.office365.com`, `587` |
+| `MAIL_FROM` | Sender shown on emails | `StaffSync <no-reply@example.com>` |
+| `APP_URL` | Frontend address used in reset links | first `CLIENT_URL` |
+| `RESET_TOKEN_MINUTES` | How long a reset link works | `30` |
+| `FORGOT_PASSWORD_MAX_PER_HOUR` | Reset emails per address and email per hour | `5` |
 | `LOGIN_MAX_FAILURES` | Failed logins (and failed password changes) allowed per account and address before a lock | `5` |
 | `RATE_LIMIT_WINDOW_MINUTES` | Length of the rate-limit window | `15` |
 | `RATE_LIMIT_MAX_REQUESTS` | Requests allowed per address per window, across the whole API | `1000` |
@@ -316,6 +321,8 @@ const getExample = async (req, res) => {
 | POST | `/api/auth/login` | No | – | 200 | 400, 401 |
 | GET | `/api/auth/me` | Yes | any | 200 | 401 |
 | PUT | `/api/auth/password` | Yes | any | 200 | 400, 401, 429 |
+| POST | `/api/auth/forgot-password` | No | – | 200 | 400, 429, 503 |
+| POST | `/api/auth/reset-password` | No | – | 200 | 400, 429 |
 | GET | `/api/employees` | Yes | hr | 200 | 400, 401, 403 |
 | GET | `/api/employees/team` | Yes | manager | 200 | 401, 403, 404 |
 | GET | `/api/employees/me` | Yes | any | 200 | 401, 404 |
@@ -441,6 +448,25 @@ The account and an employee profile are created together in one transaction. The
 **200** `Login successful` with `data: { token, user }`.
 
 **401** `Invalid email or password` for both an unknown email and a wrong password, and both take the same time, so neither reveals whether an account exists. A deactivated account gets **401** `This account has been deactivated. Contact HR.`, but only once the correct password has been given.
+
+### Forgot password (email reset)
+
+1. **`POST /api/auth/forgot-password`** with `{ "email": "…" }` always replies **200** `If an account exists for that email, a reset link has been sent.` The reply is sent before the lookup, so neither the message nor the timing reveals whether the account exists. Deactivated accounts get no email.
+2. The email links to `<APP_URL>/reset-password?token=<64 hex characters>`. The token is random (256 bits); only its SHA-256 hash is stored. It expires after `RESET_TOKEN_MINUTES` (30), works **once**, and asking again cancels the previous link.
+3. **`POST /api/auth/reset-password`** with `{ "token": "…", "newPassword": "…" }`. The usual password rules apply. **200** `Your password has been reset. Please log in.` **Every existing session is signed out.** An unknown, used, cancelled or expired link gives **400** `This reset link is invalid or has expired. Please request a new one.`
+
+| Limit | Default |
+|---|---|
+| Reset emails per address and email | 5 per hour → **429** |
+| Reset attempts per address | 10 per 15 minutes → **429** |
+
+**Setting up email:** add `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` and `MAIL_FROM` to `server/.env`, then restart the server.
+
+- **Microsoft 365:** use `smtp.office365.com`, port `587`, a mailbox that has *Authenticated SMTP* enabled.
+- **Gmail:** use `smtp.gmail.com`, port `587`, and an app password.
+- **Until it's set up:** in development the email, link included, is printed in the `npm run dev` terminal so you can test the whole flow. In production the endpoint replies **503** `Password reset by email is not available. Contact HR.`, rather than pretending to have sent anything.
+
+In the app: **Forgot password?** on the login page.
 
 ### PUT /api/auth/password
 
@@ -791,6 +817,7 @@ The requirements checklist (docs/PHASE-0-REQUIREMENTS.md §12) and the extra har
 | Passwords | bcrypt cost 12; never selected or returned; 8–72 bytes with a letter and a number |
 | Tokens | HS256 pinned, `JWT_SECRET` ≥ 32 characters checked at start-up, payload holds only the user id; role, active status and password changes are re-checked on **every** request |
 | Password change | Requires the current password; revokes every older token |
+| Password reset | Email link with a random single-use token, stored only as a hash, valid 30 minutes; same reply for known and unknown emails; rate-limited; signs out every session; names are escaped in the HTML email |
 | Brute force | Failed logins limited per account and address (`LOGIN_MAX_FAILURES`, default 5 per 15 minutes) → **429**; successful logins never count; other accounts are unaffected. Registration and the whole API are also rate-limited per address |
 | Account enumeration | Same message and timing for an unknown email and a wrong password |
 | Privilege escalation | Self-registration always creates an employee; `role`, `isActive` and similar fields are ignored or refused; only HR changes roles; the last active HR cannot be removed |
@@ -825,7 +852,7 @@ Symptom of a CORS misconfiguration: the request works in Postman but the browser
 
 There are three layers of tests, from fastest to most realistic.
 
-**1. API test suite** (`server`, 79 tests, about 25 seconds)
+**1. API test suite** (`server`, 87 tests, about 25 seconds)
 
 ```bash
 cd server
@@ -846,6 +873,7 @@ npm test
 | `reports.test.js` | Dashboards and reports against independently calculated numbers |
 | `announcements-training.test.js` | Audiences, ten people racing for two seats, capacity, ownership, enrolment closing |
 | `notifications.test.js` | Who is notified for each event, read/read-all, failures never blocking the action |
+| `password-reset.test.js` | Same reply for unknown emails, emailed single-use link, hashed token, expiry, newer link cancels older, sessions revoked, deactivated accounts, limits, production without email |
 | `security.test.js` | Headers, CORS, repeated parameters, operator injection, ignored privilege fields, sign-up and failed-login limits, password change revoking old tokens, production config, no password hashes in responses |
 | `leave-workflow.e2e.test.js` | **End to end:** HR creates a manager → employee registers → HR places them in the team → employee applies → manager notified and approves → employee notified → HR sees the same record and totals → rejection path → deactivation keeps history |
 
@@ -1050,7 +1078,7 @@ npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/St
 
 ## Known limitations (current phase)
 
-- Users can change their own password, but there is no "forgot password" email reset yet; HR would need to create a new account or an admin reset the password in the database.
+- Password reset needs an SMTP account in `.env` before it can email anyone outside development.
 - Absences are calculated in reports, not stored as records. There is no public-holiday calendar yet, so holidays count as absences.
 - Reports cover active employees only; someone deactivated part-way through a period drops out of that period's report.
 - Check-in and check-out must fall on the same calendar day.

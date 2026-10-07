@@ -73,6 +73,21 @@ const createLimiters = () => {
       limit: numberFromEnv('REGISTER_MAX_PER_HOUR', process.env.NODE_ENV === 'production' ? 10 : 100),
       message: 'Too many accounts created from this address.',
     }),
+    // Reset emails per address and email, so the feature cannot be used to flood an inbox.
+    // Every request counts, because the response is the same whether or not the account exists.
+    forgotPassword: limiter({
+      windowMinutes: 60,
+      limit: numberFromEnv('FORGOT_PASSWORD_MAX_PER_HOUR', 5),
+      message: 'Too many password reset requests.',
+      keyGenerator: (req) => `forgot|${ipKeyGenerator(req.ip)}|${String(req.body?.email || '').trim().toLowerCase()}`,
+    }),
+    // Attempts to use reset links, per address: tokens are unguessable, but there is no reason to
+    // allow unlimited tries.
+    resetPassword: limiter({
+      windowMinutes,
+      limit: numberFromEnv('RESET_PASSWORD_MAX_ATTEMPTS', 10),
+      message: 'Too many password reset attempts.',
+    }),
     // Wrong current passwords when changing password, per account.
     passwordChange: limiter({
       windowMinutes,
@@ -89,6 +104,9 @@ const assertProductionConfig = (allowedOrigins) => {
   if (process.env.NODE_ENV !== 'production') return;
   if (allowedOrigins.length === 0) {
     throw new Error('CLIENT_URL must list the frontend origin(s) in production.');
+  }
+  if (!process.env.SMTP_HOST) {
+    console.warn('SMTP is not configured: "Forgot password" will reply that email reset is unavailable.');
   }
 };
 

@@ -5,6 +5,8 @@ import FullPageMessage from '../components/FullPageMessage';
 import AppLayout from '../layouts/AppLayout';
 import LoginPage from '../pages/auth/LoginPage';
 import RegisterPage from '../pages/auth/RegisterPage';
+import ForgotPasswordPage from '../pages/auth/ForgotPasswordPage';
+import ResetPasswordPage from '../pages/auth/ResetPasswordPage';
 import { PublicOnly, RequireAuth, RequireRole, RoleHome } from './guards';
 import { NAVIGATION } from './navigation';
 import pages from './pages';
@@ -30,7 +32,10 @@ function AppRoutes() {
       <Route element={<PublicOnly />}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       </Route>
+      {/* Reachable while signed in too: the emailed link may be opened in a browser that has a session. */}
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       <Route element={<RequireAuth />}>
         <Route path="/" element={<RoleHome />} />
