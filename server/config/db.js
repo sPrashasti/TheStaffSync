@@ -12,7 +12,9 @@ if (isLoopbackOnly) {
 // the unknown field, turning e.g. { notAField: 1 } into {} and matching every document.
 mongoose.set('strictQuery', 'throw');
 
-mongoose.connection.on('disconnected', () => console.warn('MongoDB disconnected'));
+mongoose.connection.on('disconnected', () => {
+  if (process.env.NODE_ENV !== 'test') console.warn('MongoDB disconnected');
+});
 mongoose.connection.on('reconnected', () => console.log('MongoDB reconnected'));
 
 // Resolves once connected; the caller decides what to do if it rejects.

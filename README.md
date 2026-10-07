@@ -22,7 +22,9 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | 11 | Notifications | ✅ Complete |
 | 12 | Frontend foundation: auth pages, session, protected routes, layout | ✅ Complete |
 | 13 | Role dashboards and pages using the real API | ✅ Complete |
-| 14–18 | Testing, security hardening, optimisation, deployment | Planned |
+| 14 | Automated tests and end-to-end leave workflow | ✅ Complete |
+| 15 | Security hardening | ⏳ Next |
+| 16–18 | Optimisation, acceptance check, deployment | Planned |
 
 ## Tech stack
 
@@ -31,7 +33,7 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | Backend | Node.js (≥ 20.6), Express 5, Mongoose 9, express-validator, jsonwebtoken, bcryptjs, dotenv, cors |
 | Database | MongoDB (local or Atlas) |
 | Frontend | React 19, Vite 8, Material UI, Axios, React Router, Redux Toolkit |
-| Testing | Postman / Newman |
+| Testing | Node.js built-in test runner (`node --test`), Postman / Newman |
 
 ## Folder structure
 
@@ -771,6 +773,46 @@ Requests from other origins receive **403** `Origin … is not allowed by CORS`.
 
 Symptom of a CORS misconfiguration: the request works in Postman but the browser console shows *"blocked by CORS policy"*. Check that `CLIENT_URL` exactly matches the address in your browser bar (scheme, host and port, no trailing slash), then restart the server.
 
+## Automated tests
+
+There are three layers of tests, from fastest to most realistic.
+
+**1. API test suite** (`server`, 67 tests, about 20 seconds)
+
+```bash
+cd server
+npm test
+```
+
+- Starts the real app on a random port and calls it over HTTP, exactly as the frontend does.
+- Each test file uses its own throwaway database on the same cluster as `MONGO_URI` (`staffsync_test_<area>`), emptied before and after, so files run in parallel and **your real data is never touched**. Set `TEST_MONGO_URI` to use a different cluster. The suite refuses to run against a database whose name does not contain `test`.
+- No extra packages: it uses Node's built-in test runner.
+
+| File | Covers |
+|---|---|
+| `foundation.test.js` | Response envelope, error mapping (400/404/409/413/500), validation, pagination |
+| `auth.test.js` | Registration, password policy, login, tokens (expired, forged, `alg: none`), deactivation |
+| `employees.test.js` | Role checks, team scoping, self-edit limits, reporting lines, last-HR rule, time zones |
+| `attendance.test.js` | Date helpers, one check-in per day under concurrency, half/full days, filters, per-employee time zones |
+| `leave.test.js` | Date rules, overlaps under concurrency, who may decide, decide-once race, list scoping |
+| `reports.test.js` | Dashboards and reports against independently calculated numbers |
+| `announcements-training.test.js` | Audiences, ten people racing for two seats, capacity, ownership, enrolment closing |
+| `notifications.test.js` | Who is notified for each event, read/read-all, failures never blocking the action |
+| `leave-workflow.e2e.test.js` | **End to end:** HR creates a manager → employee registers → HR places them in the team → employee applies → manager notified and approves → employee notified → HR sees the same record and totals → rejection path → deactivation keeps history |
+
+**2. Client tests** (`client`, a few seconds)
+
+```bash
+cd client
+npm test
+```
+
+Checks date and time formatting (British style, 24-hour clock, calendar dates that never shift a day, time zone conversion) and display labels.
+
+**3. Manual browser checklist:** [docs/E2E-CHECKLIST.md](docs/E2E-CHECKLIST.md) walks through the same leave workflow in the UI with the three demo accounts, plus attendance, people management, training, announcements, light/dark mode, mobile width and keyboard use. About 20 minutes.
+
+The Postman collection below remains the quickest way to exercise a running server by hand.
+
 ## Testing with Postman
 
 1. In Postman choose **Import** and select both files in [docs/postman/](docs/postman/).
@@ -968,5 +1010,5 @@ npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/St
 - Notifications are in-app only (no email), and old ones are never deleted automatically.
 - No rate limiting on login yet (security hardening, Phase 15).
 - No logout endpoint: tokens are stateless, so the client logs out by discarding the token. Deactivating a user blocks their tokens immediately.
-- The frontend has no automated UI tests yet (Phase 14), and the notification bell refreshes every minute rather than live.
+- The UI itself is checked by the manual checklist rather than automated browser tests, and the notification bell refreshes every minute rather than live.
 - The login token is stored in `localStorage`; moving it to an HTTP-only cookie is part of security hardening (Phase 15).

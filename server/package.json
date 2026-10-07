@@ -14,7 +14,8 @@
     "db:indexes": "node scripts/syncIndexes.js",
     "seed": "node seed/seed.js",
     "seed:demo": "node seed/seed.js --demo",
-    "clean:test-data": "node scripts/cleanTestData.js"
+    "clean:test-data": "node scripts/cleanTestData.js",
+    "test": "node --test \"tests/*.test.js\""
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

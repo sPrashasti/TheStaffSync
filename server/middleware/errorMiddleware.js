@@ -71,7 +71,8 @@ const errorHandler = (err, req, res, next) => {
 
   const isProduction = process.env.NODE_ENV === 'production';
   if (statusCode === 500) {
-    console.error(err);
+    // The test suite triggers 500s on purpose; keep its output readable.
+    if (process.env.NODE_ENV !== 'test') console.error(err);
     if (isProduction) message = 'Internal Server Error';
   }
 
