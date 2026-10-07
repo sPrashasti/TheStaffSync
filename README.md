@@ -25,8 +25,8 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | 14 | Automated tests and end-to-end leave workflow | ✅ Complete |
 | 15 | Security hardening | ✅ Complete |
 | 16 | Pagination and measured optimisation | ✅ Complete |
-| 17 | Full acceptance check | ⏳ Next |
-| 18 | Deployment | Planned |
+| 17 | Full acceptance check ([docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)) | ✅ 29/30 automated; browser walkthrough pending |
+| 18 | Deployment | ⏳ Next |
 
 ## Tech stack
 
@@ -70,6 +70,8 @@ TheStaffSync/
 │   └── .env.example
 └── docs/
     ├── PHASE-0-REQUIREMENTS.md
+    ├── ACCEPTANCE.md           Phase 17 acceptance check: 30 criteria with evidence
+    ├── E2E-CHECKLIST.md        Manual browser walkthrough for all roles
     └── postman/                Postman collection + environment
 ```
 
@@ -900,7 +902,7 @@ Symptom of a CORS misconfiguration: the request works in Postman but the browser
 
 There are three layers of tests, from fastest to most realistic.
 
-**1. API test suite** (`server`, 87 tests, about 25 seconds)
+**1. API test suite** (`server`, 129 tests, about 30 seconds)
 
 ```bash
 cd server
@@ -923,6 +925,7 @@ npm test
 | `notifications.test.js` | Who is notified for each event, read/read-all, failures never blocking the action |
 | `password-reset.test.js` | Same reply for unknown emails, emailed single-use link, hashed token, expiry, newer link cancels older, sessions revoked, deactivated accounts, limits, production without email |
 | `security.test.js` | Headers, CORS, repeated parameters, operator injection, ignored privilege fields, sign-up and failed-login limits, password change revoking old tokens, production config, no password hashes in responses |
+| `acceptance-endpoints.test.js` | Every endpoint planned in the requirements (41) is mounted, open to the roles allowed and refused to a role that is not |
 | `leave-workflow.e2e.test.js` | **End to end:** HR creates a manager → employee registers → HR places them in the team → employee applies → manager notified and approves → employee notified → HR sees the same record and totals → rejection path → deactivation keeps history |
 
 **2. Client tests** (`client`, a few seconds)
