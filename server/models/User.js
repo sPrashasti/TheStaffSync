@@ -31,6 +31,12 @@ const userSchema = new mongoose.Schema(
       enum: { values: ROLES, message: 'Role must be one of: employee, manager, hr' },
       default: 'employee',
     },
+    // When the password last changed. Tokens issued before this are rejected, which signs out
+    // every other session.
+    passwordChangedAt: {
+      type: Date,
+      select: false,
+    },
     // Soft delete: deactivated users keep their history but cannot log in.
     isActive: {
       type: Boolean,
@@ -43,6 +49,7 @@ const userSchema = new mongoose.Schema(
       // A freshly created document still holds the hash in memory; strip it from every response.
       transform: (doc, ret) => {
         delete ret.password;
+        delete ret.passwordChangedAt;
         return ret;
       },
     },
@@ -58,7 +65,14 @@ const SALT_ROUNDS = 12;
 userSchema.pre('save', async function hashPassword() {
   if (!this.isModified('password')) return;
   this.password = await bcrypt.hash(this.password, SALT_ROUNDS);
+  // A second earlier, so the token issued with the new password (whole seconds) still counts.
+  if (!this.isNew) this.passwordChangedAt = new Date(Date.now() - 1000);
 });
+
+// True if a token issued at `issuedAt` (seconds) predates the latest password change.
+userSchema.methods.changedPasswordAfter = function changedPasswordAfter(issuedAt) {
+  return Boolean(this.passwordChangedAt) && issuedAt < Math.floor(this.passwordChangedAt.getTime() / 1000);
+};
 
 // Requires the document to have been loaded with .select('+password').
 userSchema.methods.comparePassword = function comparePassword(candidate) {

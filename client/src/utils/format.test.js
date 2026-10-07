@@ -12,6 +12,7 @@ import {
   todayIn,
 } from './format.js';
 import { audienceLabel, leaveTypeLabel } from './labels.js';
+import { passwordProblem } from './passwordPolicy.js';
 
 describe('calendar dates', () => {
   it('formats British style and never shifts the day', () => {
@@ -63,5 +64,15 @@ describe('small helpers', () => {
     assert.equal(leaveTypeLabel('earned'), 'Earned');
     assert.equal(audienceLabel('all'), 'Everyone');
     assert.equal(leaveTypeLabel('mystery'), 'mystery');
+  });
+});
+
+describe('password policy (mirrors the server)', () => {
+  it('applies the same rules as the API', () => {
+    assert.equal(passwordProblem('Passw0rd123'), '');
+    assert.equal(passwordProblem('short1'), 'At least 8 characters');
+    assert.equal(passwordProblem('abcdefghij'), 'Must contain a number');
+    assert.equal(passwordProblem('1234567890'), 'Must contain a letter');
+    assert.equal(passwordProblem(`a1${'x'.repeat(71)}`), 'At most 72 bytes');
   });
 });

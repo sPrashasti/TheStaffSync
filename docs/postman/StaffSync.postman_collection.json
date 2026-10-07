@@ -401,6 +401,16 @@
           "name": "Login unknown email returns same 401",
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// A new address each run, so repeated runs never trip the failed-login limit.",
+                  "pm.collectionVariables.set('unknownEmail', 'nobody+' + Date.now() + '@staffsync.test');"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
@@ -424,7 +434,7 @@
             "url": "{{baseUrl}}/auth/login",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"nobody@staffsync.test\",\n  \"password\": \"Passw0rd123\"\n}"
+              "raw": "{\n  \"email\": \"{{unknownEmail}}\",\n  \"password\": \"Passw0rd123\"\n}"
             }
           }
         },

@@ -4,16 +4,8 @@ import { useDispatch } from 'react-redux';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { register } from '../../store/authSlice';
 import { homePathFor } from '../../routes/navigation';
+import { passwordProblem } from '../../utils/passwordPolicy';
 import AuthCard from './AuthCard';
-
-// Same rules as the server, checked first so people get instant feedback.
-const passwordProblem = (password) => {
-  if (password.length < 8) return 'At least 8 characters';
-  if (new TextEncoder().encode(password).length > 72) return 'At most 72 bytes';
-  if (!/[A-Za-z]/.test(password)) return 'Must contain a letter';
-  if (!/\d/.test(password)) return 'Must contain a number';
-  return '';
-};
 
 function RegisterPage() {
   const dispatch = useDispatch();

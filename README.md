@@ -23,8 +23,9 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | 12 | Frontend foundation: auth pages, session, protected routes, layout | ✅ Complete |
 | 13 | Role dashboards and pages using the real API | ✅ Complete |
 | 14 | Automated tests and end-to-end leave workflow | ✅ Complete |
-| 15 | Security hardening | ⏳ Next |
-| 16–18 | Optimisation, acceptance check, deployment | Planned |
+| 15 | Security hardening | ✅ Complete |
+| 16 | Pagination and measured optimisation | ⏳ Next |
+| 17–18 | Acceptance check, deployment | Planned |
 
 ## Tech stack
 
@@ -113,6 +114,11 @@ npm run seed:demo     # optional: also a demo manager with a team, for testing
 | `JWT_SECRET` | Secret for signing tokens — at least 32 characters; the server refuses to start without it | generate with the command below |
 | `JWT_EXPIRES_IN` | Token lifetime | `1d` |
 | `CLIENT_URL` | Frontend origin(s) allowed by CORS, comma-separated | `http://localhost:5173` |
+| `LOGIN_MAX_FAILURES` | Failed logins (and failed password changes) allowed per account and address before a lock | `5` |
+| `RATE_LIMIT_WINDOW_MINUTES` | Length of the rate-limit window | `15` |
+| `RATE_LIMIT_MAX_REQUESTS` | Requests allowed per address per window, across the whole API | `1000` |
+| `REGISTER_MAX_PER_HOUR` | Self-registrations allowed per address per hour | `10` in production, `100` otherwise |
+| `TRUST_PROXY` | Number of proxies in front of the API (e.g. `1` on most hosts), so limits see the real client address. Leave unset when running directly | unset |
 | `WORKING_DAYS` | Working days used to count absences in reports, comma-separated from `Sun Mon Tue Wed Thu Fri Sat`; the server will not start with an invalid list | `Mon,Tue,Wed,Thu,Fri` (default); `Mon,Tue,Wed,Thu,Fri,Sat` for a six-day week |
 | `TIMEZONE` | Company **default** time zone (IANA name) for attendance and leave dates. HR can give individual employees their own (see *Time zones*). The server will not start with an invalid one | `Asia/Kolkata` (IST, the default if unset) |
 | `SEED_HR_NAME` | Name of the first HR account (seed script only) | `StaffSync HR` |
@@ -309,6 +315,7 @@ const getExample = async (req, res) => {
 | POST | `/api/auth/register` | No | – (always creates an employee) | 201 | 400, 409 |
 | POST | `/api/auth/login` | No | – | 200 | 400, 401 |
 | GET | `/api/auth/me` | Yes | any | 200 | 401 |
+| PUT | `/api/auth/password` | Yes | any | 200 | 400, 401, 429 |
 | GET | `/api/employees` | Yes | hr | 200 | 400, 401, 403 |
 | GET | `/api/employees/team` | Yes | manager | 200 | 401, 403, 404 |
 | GET | `/api/employees/me` | Yes | any | 200 | 401, 404 |
@@ -434,6 +441,20 @@ The account and an employee profile are created together in one transaction. The
 **200** `Login successful` with `data: { token, user }`.
 
 **401** `Invalid email or password` for both an unknown email and a wrong password, and both take the same time, so neither reveals whether an account exists. A deactivated account gets **401** `This account has been deactivated. Contact HR.`, but only once the correct password has been given.
+
+### PUT /api/auth/password
+
+Changes your own password.
+
+```json
+{ "currentPassword": "Passw0rd123", "newPassword": "N3wPassword!" }
+```
+
+- **200** `Password changed` with `data: { token }`. The new token keeps this session signed in; **every token issued before the change stops working** (401 `Your password was changed. Please log in again.`), which signs out other devices.
+- **400** if the current password is wrong (field `currentPassword`), or the new one breaks the password rules or matches the current one.
+- **429** after `LOGIN_MAX_FAILURES` wrong current passwords in the rate-limit window.
+
+In the app: **My profile → Change password**.
 
 ### GET /api/auth/me
 
@@ -761,6 +782,33 @@ Notifications are created automatically by other modules and stored in MongoDB:
 | `PUT /api/notifications/:id/read` | Marks one read. Someone else's gives **404** `Notification not found` |
 | `PUT /api/notifications/read-all` | Marks all yours read; `data.updated` says how many |
 
+## Security
+
+The requirements checklist (docs/PHASE-0-REQUIREMENTS.md §12) and the extra hardening from Phase 15. Each item is covered by the automated tests in `server/tests`, mostly `security.test.js` and `auth.test.js`.
+
+| Protection | How |
+|---|---|
+| Passwords | bcrypt cost 12; never selected or returned; 8–72 bytes with a letter and a number |
+| Tokens | HS256 pinned, `JWT_SECRET` ≥ 32 characters checked at start-up, payload holds only the user id; role, active status and password changes are re-checked on **every** request |
+| Password change | Requires the current password; revokes every older token |
+| Brute force | Failed logins limited per account and address (`LOGIN_MAX_FAILURES`, default 5 per 15 minutes) → **429**; successful logins never count; other accounts are unaffected. Registration and the whole API are also rate-limited per address |
+| Account enumeration | Same message and timing for an unknown email and a wrong password |
+| Privilege escalation | Self-registration always creates an employee; `role`, `isActive` and similar fields are ignored or refused; only HR changes roles; the last active HR cannot be removed |
+| Access control | `protect` + `authorize(roles)` on every route; "own" and "team" data resolved on the server from the token, never from request parameters |
+| Injection | Every write endpoint is validated with a whitelist of fields (unknown fields → 400); values must be the right type, so `{ "$gt": "" }` is rejected; unknown and **repeated** query parameters → 400; queries on fields outside the schema throw |
+| Headers | `helmet`: `nosniff`, HSTS, `frame-ancestors 'none'`, a CSP that allows nothing (the API only serves JSON), no `X-Powered-By`; every response is `Cache-Control: no-store` |
+| CORS | Only origins in `CLIENT_URL`; the server refuses to start in production without it |
+| Errors | One handler; production 500s say only `Internal Server Error`; submitted values are never echoed back |
+| Data retention | People are deactivated, never deleted, so history stays intact; deactivation blocks existing tokens immediately |
+| Secrets | `.env` files are git-ignored; `.env.example` holds placeholders only; nothing secret is bundled into the frontend |
+| Dependencies | `npm audit` reports 0 known vulnerabilities in both apps (checked in Phase 15) |
+
+**Where the login token lives.** The browser keeps the token in `localStorage` and sends it as `Authorization: Bearer …`, as the requirements specify. An HTTP-only cookie was considered. If the frontend and API end up on different domains (common with hosting providers), cookies would need `SameSite=None` plus a separate CSRF-token scheme, which adds risk and complexity. The trade-off accepted instead:
+
+- React escapes all rendered text, and the app never injects raw HTML.
+- Tokens expire after `JWT_EXPIRES_IN` (default 1 day), and a password change revokes them.
+- When deploying, serve the frontend with a strict Content-Security-Policy (Phase 18) so injected scripts cannot run.
+
 ## CORS configuration
 
 The API only accepts browser requests from origins listed in `CLIENT_URL`.
@@ -777,7 +825,7 @@ Symptom of a CORS misconfiguration: the request works in Postman but the browser
 
 There are three layers of tests, from fastest to most realistic.
 
-**1. API test suite** (`server`, 67 tests, about 20 seconds)
+**1. API test suite** (`server`, 79 tests, about 25 seconds)
 
 ```bash
 cd server
@@ -798,6 +846,7 @@ npm test
 | `reports.test.js` | Dashboards and reports against independently calculated numbers |
 | `announcements-training.test.js` | Audiences, ten people racing for two seats, capacity, ownership, enrolment closing |
 | `notifications.test.js` | Who is notified for each event, read/read-all, failures never blocking the action |
+| `security.test.js` | Headers, CORS, repeated parameters, operator injection, ignored privilege fields, sign-up and failed-login limits, password change revoking old tokens, production config, no password hashes in responses |
 | `leave-workflow.e2e.test.js` | **End to end:** HR creates a manager → employee registers → HR places them in the team → employee applies → manager notified and approves → employee notified → HR sees the same record and totals → rejection path → deactivation keeps history |
 
 **2. Client tests** (`client`, a few seconds)
@@ -1001,14 +1050,14 @@ npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/St
 
 ## Known limitations (current phase)
 
-- No password change or reset endpoint yet.
+- Users can change their own password, but there is no "forgot password" email reset yet; HR would need to create a new account or an admin reset the password in the database.
 - Absences are calculated in reports, not stored as records. There is no public-holiday calendar yet, so holidays count as absences.
 - Reports cover active employees only; someone deactivated part-way through a period drops out of that period's report.
 - Check-in and check-out must fall on the same calendar day.
 - Leave counts calendar days (weekends and public holidays included), and there are no leave balances or allowances yet.
 - Employees cannot cancel a leave request yet.
 - Notifications are in-app only (no email), and old ones are never deleted automatically.
-- No rate limiting on login yet (security hardening, Phase 15).
+- Rate limits are kept in memory, so they reset when the server restarts and are per server instance. Running several instances would need a shared store such as Redis.
 - No logout endpoint: tokens are stateless, so the client logs out by discarding the token. Deactivating a user blocks their tokens immediately.
 - The UI itself is checked by the manual checklist rather than automated browser tests, and the notification bell refreshes every minute rather than live.
-- The login token is stored in `localStorage`; moving it to an HTTP-only cookie is part of security hardening (Phase 15).
+- The login token is stored in `localStorage` (see *Security* for why, and how the risk is limited).

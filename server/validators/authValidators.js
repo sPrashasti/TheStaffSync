@@ -1,4 +1,4 @@
-const { body } = require('express-validator');
+const { body, checkExact } = require('express-validator');
 const { passwordProblem } = require('../utils/passwordPolicy');
 
 // Shared with the HR "create employee" endpoint in Phase 6.
@@ -34,4 +34,18 @@ const loginRules = [
   body('password').isString().notEmpty().withMessage('Password is required'),
 ];
 
-module.exports = { registerRules, loginRules, newPasswordRule, emailRule };
+// PUT /api/auth/password. Only these two fields are accepted.
+const changePasswordRules = [
+  checkExact(
+    [
+      body('currentPassword').isString().notEmpty().withMessage('Current password is required'),
+      newPasswordRule('newPassword'),
+      body('newPassword')
+        .custom((value, { req }) => value !== req.body.currentPassword)
+        .withMessage('New password must be different from the current one'),
+    ],
+    { locations: ['body'] }
+  ),
+];
+
+module.exports = { registerRules, loginRules, changePasswordRules, newPasswordRule, emailRule };

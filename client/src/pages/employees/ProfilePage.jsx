@@ -20,6 +20,7 @@ import { useSnackbar } from '../../hooks/useSnackbar';
 import { getMyProfile, updateEmployee } from '../../services/employeeService';
 import { formatDay } from '../../utils/format';
 import { ROLES } from '../../utils/labels';
+import ChangePasswordDialog from './ChangePasswordDialog';
 
 function Row({ label, value }) {
   return (
@@ -39,6 +40,7 @@ function ProfilePage() {
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const open = () => {
     setForm({ phone: data.phone || '', address: data.address || '' });
@@ -68,7 +70,15 @@ function ProfilePage() {
 
   return (
     <>
-      <PageHeader title="My profile" actions={data && <Button variant="contained" onClick={open}>Edit contact details</Button>} />
+      <PageHeader
+        title="My profile"
+        actions={data && (
+          <>
+            <Button variant="outlined" onClick={() => setChangingPassword(true)}>Change password</Button>
+            <Button variant="contained" onClick={open}>Edit contact details</Button>
+          </>
+        )}
+      />
       <LoadState loading={loading} error={error} data={data} onRetry={reload}>
         {data && (
           <Card variant="outlined">
@@ -92,6 +102,8 @@ function ProfilePage() {
           </Card>
         )}
       </LoadState>
+
+      <ChangePasswordDialog open={changingPassword} onClose={() => setChangingPassword(false)} />
 
       <Dialog open={editing} onClose={busy ? undefined : () => setEditing(false)} maxWidth="sm" fullWidth>
         <form onSubmit={save} noValidate>

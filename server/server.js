@@ -5,6 +5,7 @@ const { mountedPaths } = app;
 const { connectDB, disconnectDB } = require('./config/db');
 const { allowedOrigins } = require('./config/cors');
 const { assertJwtConfig } = require('./utils/token');
+const { assertProductionConfig } = require('./config/security');
 const { assertTimeZone, getTimeZone, assertWorkingDays, getWorkingDayNames } = require('./utils/dates');
 
 // Registers every model so Mongoose builds their indexes on connect.
@@ -15,6 +16,7 @@ const PORT = process.env.PORT || 5000;
 const start = async () => {
   try {
     assertJwtConfig();
+    assertProductionConfig(allowedOrigins);
     assertTimeZone();
     assertWorkingDays();
   } catch (err) {

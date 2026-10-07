@@ -67,6 +67,11 @@ const authSlice = createSlice({
     clearNotice: (state) => {
       state.notice = '';
     },
+    // After a password change the server issues a new token; older ones stop working.
+    tokenReplaced: (state, action) => {
+      tokenStorage.set(action.payload);
+      state.token = action.payload;
+    },
   },
   extraReducers: (builder) => {
     const signedIn = (state, { payload }) => {
@@ -96,7 +101,7 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, sessionExpired, clearNotice } = authSlice.actions;
+export const { logout, sessionExpired, clearNotice, tokenReplaced } = authSlice.actions;
 export default authSlice.reducer;
 
 export const selectAuth = (state) => state.auth;

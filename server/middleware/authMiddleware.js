@@ -25,12 +25,15 @@ const protect = async (req, res, next) => {
     throw new AppError('Invalid token. Please log in again.', 401);
   }
 
-  const user = await User.findById(payload.id);
+  const user = await User.findById(payload.id).select('+passwordChangedAt');
   if (!user) {
     throw new AppError('The account for this token no longer exists.', 401);
   }
   if (!user.isActive) {
     throw new AppError('This account has been deactivated.', 401);
+  }
+  if (user.changedPasswordAfter(payload.iat)) {
+    throw new AppError('Your password was changed. Please log in again.', 401);
   }
 
   req.user = user;

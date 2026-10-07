@@ -70,4 +70,18 @@ const getMe = async (req, res) => {
   });
 };
 
-module.exports = { register, login, getMe };
+// PUT /api/auth/password — any logged-in user. Returns a fresh token for this session; every
+// token issued before the change stops working.
+const changePassword = async (req, res) => {
+  const user = await User.findById(req.user._id).select('+password');
+  // 400 rather than 401: the session is valid, only the field is wrong.
+  if (!(await user.comparePassword(req.body.currentPassword))) {
+    throw new AppError('Validation failed', 400, [{ field: 'currentPassword', message: 'Current password is incorrect' }]);
+  }
+  user.password = req.body.newPassword;
+  await user.save();
+
+  sendSuccess(res, { message: 'Password changed', data: { token: signToken(user._id) } });
+};
+
+module.exports = { register, login, getMe, changePassword };

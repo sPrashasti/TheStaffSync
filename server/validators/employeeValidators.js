@@ -3,7 +3,8 @@ const { ROLES } = require('../models/User');
 const { emailRule, newPasswordRule } = require('./authValidators');
 const { isValidTimeZone } = require('../utils/dates');
 
-const listEmployeesRules = [
+// Unknown query parameters are refused, as on every other list endpoint.
+const listEmployeesRules = [checkExact([
   query('department')
     .optional()
     .isString().withMessage('Department must be text')
@@ -18,7 +19,7 @@ const listEmployeesRules = [
     .toBoolean(),
   query('page').optional().isInt({ min: 1 }).withMessage('page must be a positive whole number'),
   query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('limit must be between 1 and 100'),
-];
+], { locations: ['query'] })];
 
 // Field rules shared by create and update. `required` decides whether a field must be present.
 const text = (field, label, max, required) => {

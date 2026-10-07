@@ -220,18 +220,20 @@ Each backend phase ends with the 12-point API Integration Checkpoint (brief §26
 
 ## 12. Security Checklist
 
-- [ ] Passwords hashed with bcryptjs (salt ≥ 10); `password` has `select: false` and is stripped from every response
-- [ ] JWT signed with `JWT_SECRET` from `.env`; payload contains only `{ id }` (role re-read from DB on each request so revocation/role changes take effect)
-- [ ] Expired/invalid/absent tokens → 401; wrong role → 403
-- [ ] Public registration cannot create manager/HR accounts
-- [ ] All ownership and team scoping resolved server-side from the authenticated user, never from request parameters
-- [ ] Input validation on every write endpoint (express-validator) in addition to Mongoose validation
-- [ ] Request bodies whitelisted per endpoint — no blind `req.body` spreads into models (blocks privilege-escalation fields and operator injection)
-- [ ] CORS restricted to `CLIENT_URL`, no blind wildcard
-- [ ] Central error handler: generic message + no stack traces in production responses
-- [ ] `.env` in `.gitignore`; `.env.example` with placeholders only; no secrets in frontend code
-- [ ] Deactivated users (`isActive: false`) cannot log in or use existing tokens
-- [ ] Soft delete for people records so references (leaves, attendance) stay intact
+> All items verified in Phase 15 and covered by `server/tests`. See the README *Security* section for how each is met.
+
+- [x] Passwords hashed with bcryptjs (salt ≥ 10); `password` has `select: false` and is stripped from every response
+- [x] JWT signed with `JWT_SECRET` from `.env`; payload contains only `{ id }` (role re-read from DB on each request so revocation/role changes take effect)
+- [x] Expired/invalid/absent tokens → 401; wrong role → 403
+- [x] Public registration cannot create manager/HR accounts
+- [x] All ownership and team scoping resolved server-side from the authenticated user, never from request parameters
+- [x] Input validation on every write endpoint (express-validator) in addition to Mongoose validation
+- [x] Request bodies whitelisted per endpoint — no blind `req.body` spreads into models (blocks privilege-escalation fields and operator injection)
+- [x] CORS restricted to `CLIENT_URL`, no blind wildcard
+- [x] Central error handler: generic message + no stack traces in production responses
+- [x] `.env` in `.gitignore`; `.env.example` with placeholders only; no secrets in frontend code
+- [x] Deactivated users (`isActive: false`) cannot log in or use existing tokens
+- [x] Soft delete for people records so references (leaves, attendance) stay intact
 
 ## 13. Technical Risks and Prevention
 
