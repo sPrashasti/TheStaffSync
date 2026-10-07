@@ -29,9 +29,12 @@ const registerRules = [
 
 // Login only checks that something was sent; strength rules would leak policy details
 // and could lock out accounts created under older rules.
+// Only email and password are accepted; anything else (such as a role) is refused with 400.
 const loginRules = [
-  emailRule(),
-  body('password').isString().notEmpty().withMessage('Password is required'),
+  checkExact(
+    [emailRule(), body('password').isString().notEmpty().withMessage('Password is required')],
+    { locations: ['body'] }
+  ),
 ];
 
 // PUT /api/auth/password. Only these two fields are accepted.
