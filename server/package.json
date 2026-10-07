@@ -11,7 +11,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "db:indexes": "node scripts/syncIndexes.js"
+    "db:indexes": "node scripts/syncIndexes.js",
+    "seed": "node seed/seed.js",
+    "seed:demo": "node seed/seed.js --demo"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

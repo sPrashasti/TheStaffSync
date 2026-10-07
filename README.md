@@ -13,8 +13,9 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | 2 | MongoDB connection + Mongoose models | ✅ Complete |
 | 3 | Backend foundation: response helpers, error mapping, validation | ✅ Complete |
 | 4 | Authentication (register, login, JWT) | ✅ Complete |
-| 5 | Role-based access control | ⏳ Next |
-| 6–11 | Backend modules (employees, attendance, leave, HR, announcements, training, notifications) | Planned |
+| 5 | Role-based access control, seed script, employee read endpoints | ✅ Complete |
+| 6 | Employee management (create, update, deactivate) | ⏳ Next |
+| 7–11 | Backend modules (attendance, leave, HR, announcements, training, notifications) | Planned |
 | 12–13 | Frontend integration + dashboards | Planned |
 | 14–18 | Testing, security hardening, optimisation, deployment | Planned |
 
@@ -35,11 +36,12 @@ TheStaffSync/
 │   ├── config/cors.js          CORS allow-list built from CLIENT_URL
 │   ├── config/db.js            MongoDB connection
 │   ├── controllers/            Request handlers (business logic)
-│   ├── middleware/             Error handling, request validation (auth/roles added later)
+│   ├── middleware/             Error handling, validation, protect / authorize / loadEmployee
 │   ├── models/                 Mongoose schemas — models/index.js loads them all
 │   ├── routes/                 Express routers — each one mounted in app.js
 │   ├── scripts/                Maintenance scripts (index sync)
-│   ├── utils/                  AppError, response helpers, pagination, JWT
+│   ├── seed/seed.js            Creates the first HR account (and optional demo data)
+│   ├── utils/                  AppError, response helpers, pagination, JWT, password policy
 │   ├── validators/             express-validator rules per module
 │   ├── app.js                  Builds the Express app (middleware + routes)
 │   ├── server.js               Loads .env, connects to MongoDB, then starts listening
@@ -76,7 +78,13 @@ npm install
 cp .env.example .env
 ```
 
-Then edit both `.env` files (see below).
+Then edit both `.env` files (see below), and create the first HR account:
+
+```bash
+cd server
+npm run seed          # first HR account, from SEED_HR_* in .env
+npm run seed:demo     # optional: also a demo manager with a team, for testing
+```
 
 ## Environment variables
 
@@ -90,6 +98,10 @@ Then edit both `.env` files (see below).
 | `JWT_SECRET` | Secret for signing tokens — at least 32 characters; the server refuses to start without it | generate with the command below |
 | `JWT_EXPIRES_IN` | Token lifetime | `1d` |
 | `CLIENT_URL` | Frontend origin(s) allowed by CORS, comma-separated | `http://localhost:5173` |
+| `SEED_HR_NAME` | Name of the first HR account (seed script only) | `StaffSync HR` |
+| `SEED_HR_EMAIL` | Email of the first HR account | `hr@example.com` |
+| `SEED_HR_PASSWORD` | Its password: 8+ characters with a letter and a number | — |
+| `SEED_DEMO_PASSWORD` | Shared password for the `npm run seed:demo` accounts | — |
 
 Generate a JWT secret:
 
@@ -118,7 +130,7 @@ npm run dev
 # → MongoDB connected: <host>/<database>
 # → StaffSync API listening on http://localhost:5000 (development)
 # → CORS allowed origins: http://localhost:5173
-# → Mounted routes: /api/health, /api/auth
+# → Mounted routes: /api/health, /api/auth, /api/employees
 
 # Terminal 2 — frontend
 cd client
@@ -212,7 +224,7 @@ All errors go through one handler ([server/middleware/errorMiddleware.js](server
 Each module from Phase 4 onwards follows the same four steps:
 
 1. **Controller**: an `async` function per endpoint. Throw `new AppError(message, status)` for expected failures and reply with `sendSuccess` / `sendCreated` from `utils/apiResponse.js`. Express 5 forwards errors from async functions to the error handler, so no try/catch or wrapper is needed.
-2. **Routes**: express-validator chains, then `validate`, then the controller. Use `validateObjectId()` on any `:id` route.
+2. **Routes**: `protect`, then `authorize(...roles)` if only some roles may call it, then express-validator chains and `validate`, then the controller. Use `validateObjectId()` on any `:id` route, and `loadEmployee` when the controller needs the caller's own employee record.
 3. **Mount**: add one line to the `routes` table in [server/app.js](server/app.js). The dev boot log prints this table, so check your path appears.
 4. **Test**: add requests to the Postman collection covering the success case and each error case.
 
@@ -237,6 +249,9 @@ const getExample = async (req, res) => {
 | POST | `/api/auth/register` | No | – (always creates an employee) | 201 | 400, 409 |
 | POST | `/api/auth/login` | No | – | 200 | 400, 401 |
 | GET | `/api/auth/me` | Yes | any | 200 | 401 |
+| GET | `/api/employees` | Yes | hr | 200 | 400, 401, 403 |
+| GET | `/api/employees/team` | Yes | manager | 200 | 401, 403, 404 |
+| GET | `/api/employees/me` | Yes | any | 200 | 401, 404 |
 
 More endpoints are added and documented phase by phase; the full planned list is in [docs/PHASE-0-REQUIREMENTS.md](docs/PHASE-0-REQUIREMENTS.md#5-api-endpoint-list).
 
@@ -325,6 +340,38 @@ The account and an employee profile are created together in one transaction. The
 
 Requires a token. **200** `Current user` with `data: { user, employee }`.
 
+### Role-based access
+
+Routes are protected in two layers, both enforced on the server:
+
+- `protect`: a valid token for an active user, otherwise **401**.
+- `authorize(...roles)`: the user's role must be listed, otherwise **403** `You do not have permission to perform this action`.
+
+The role always comes from the database, never from the token or the request, so a promotion, demotion or deactivation takes effect on the very next request. "Own" and "team" data are worked out on the server from the logged-in user. The client never sends whose data it wants.
+
+A manager's **team** is every employee whose `managerId` is the manager's own employee record.
+
+### GET /api/employees (hr)
+
+Paginated list of all employees with their account details. Optional query parameters:
+
+| Parameter | Values |
+|---|---|
+| `department` | exact department name, e.g. `Engineering` |
+| `role` | `employee`, `manager` or `hr` |
+| `isActive` | `true` or `false` |
+| `page`, `limit` | page number; page size 1–100 (default 10) |
+
+**200** `Employees` with `data: { items, page, limit, total, totalPages }`. Each item includes `userId: { name, email, role, isActive }` and, if set, `managerId` with the manager's name.
+
+### GET /api/employees/team (manager)
+
+**200** `Team members` with `data` as an array of the manager's direct reports, including deactivated ones (`userId.isActive: false`). HR uses `GET /api/employees` instead and gets 403 here.
+
+### GET /api/employees/me (any role)
+
+**200** `Employee profile`, the caller's own employee record with account and manager details. **404** if the account has no employee profile.
+
 ## CORS configuration
 
 The API only accepts browser requests from origins listed in `CLIENT_URL`.
@@ -341,9 +388,10 @@ Symptom of a CORS misconfiguration: the request works in Postman but the browser
 
 1. In Postman choose **Import** and select both files in [docs/postman/](docs/postman/).
 2. Select the **StaffSync Local** environment (top right).
-3. Open the collection, choose **Run collection**, and run it with the backend started.
+3. Click the environment's eye icon and fill in **hrPassword** and **managerPassword**. These are `SEED_HR_PASSWORD` and `SEED_DEMO_PASSWORD` from `server/.env`. Run `npm run seed:demo` first if you haven't. The passwords stay in your local Postman only; the committed environment file leaves them blank.
+4. Open the collection, choose **Run collection**, and run it with the backend started.
 
-Every request carries automated assertions. Expected result: **18 requests, 61 assertions, 0 failures**.
+Every request carries automated assertions. Expected result: **36 requests, 114 assertions, 0 failures**.
 
 **00 Health**
 
@@ -372,10 +420,24 @@ Every request carries automated assertions. Expected result: **18 requests, 61 a
 
 Each run registers two new `postman+<timestamp>@staffsync.test` accounts in your database, so the collection can be re-run. Delete them from Atlas whenever you like.
 
+**02 RBAC** (needs the seeded HR and demo manager; logs in and saves `hrToken` and `managerToken`)
+
+| Request | Expected |
+|---|---|
+| HR lists employees, filtered by role / department / active status, paginated | 200 with matching items only |
+| Invalid role filter | 400 |
+| Manager or employee lists all employees | 403 |
+| List employees without token | 401 |
+| Manager views own team | 200; every member reports to that manager; `employee3@staffsync.demo` (another department) is excluded |
+| Employee or HR uses the team view | 403 |
+| Each role views own profile | 200 |
+| Own profile without token | 401 |
+
 From the command line (no Postman install needed):
 
 ```bash
-npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/StaffSync.postman_environment.json
+npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/StaffSync.postman_environment.json \
+  --env-var "hrPassword=<SEED_HR_PASSWORD>" --env-var "managerPassword=<SEED_DEMO_PASSWORD>"
 ```
 
 ## Troubleshooting
@@ -387,6 +449,9 @@ npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/St
 | `mongodb+srv URI cannot have port number` | The `@` before the cluster host was URL-encoded, or a `:port` was added — see *Database* above |
 | Server exits with a timeout / `ServerSelectionError` | Your IP is not on the Atlas Network Access list, or local MongoDB is not running |
 | A new endpoint returns `Route not found` | Its router is not in the `routes` table in `app.js` — check the `Mounted routes` boot log |
+| 403 `You do not have permission…` | The logged-in role is not allowed on that endpoint — see the API reference |
+| 404 `No employee profile exists for this account` | The user has no Employee record; register through the API or the seed script rather than inserting users by hand |
+| `Seed failed: … is not set` | Add the `SEED_*` variables to `server/.env` |
 | `Port 5000 is already in use` | Another process (or a second server terminal) is using the port — stop it or change `PORT` |
 | Page says "Unable to reach the server" | Backend not running, or `VITE_API_URL` wrong — restart Vite after editing `client/.env` |
 | `VITE_API_URL is not set` error in the browser | `client/.env` missing |
@@ -394,8 +459,7 @@ npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/St
 
 ## Known limitations (current phase)
 
-- Logged-in users are authenticated, but role checks (`authorize`) arrive in Phase 5.
-- No HR account exists yet; the seed script for the first one arrives in Phase 6.
+- Employees can only be read so far; HR create, update and deactivate arrive in Phase 6. Until then, manager accounts come from `npm run seed:demo`.
 - No rate limiting on login yet (security hardening, Phase 15).
 - No logout endpoint: tokens are stateless, so the client logs out by discarding the token. Deactivating a user blocks their tokens immediately.
 - The frontend is a single connection-check page; routing and role dashboards arrive in Phases 12–13.

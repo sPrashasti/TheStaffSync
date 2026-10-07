@@ -1,17 +1,13 @@
 const { body } = require('express-validator');
-
-// bcrypt ignores everything after 72 bytes, so longer passwords would be silently truncated.
-const MAX_PASSWORD_BYTES = 72;
+const { passwordProblem } = require('../utils/passwordPolicy');
 
 // Shared with the HR "create employee" endpoint in Phase 6.
 const newPasswordRule = (field = 'password') =>
-  body(field)
-    .isString().withMessage('Password is required')
-    .isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
-    .custom((value) => Buffer.byteLength(value, 'utf8') <= MAX_PASSWORD_BYTES)
-    .withMessage(`Password must be at most ${MAX_PASSWORD_BYTES} bytes`)
-    .matches(/[A-Za-z]/).withMessage('Password must contain a letter')
-    .matches(/\d/).withMessage('Password must contain a number');
+  body(field).custom((value) => {
+    const problem = passwordProblem(value);
+    if (problem) throw new Error(problem);
+    return true;
+  });
 
 const emailRule = () =>
   body('email')

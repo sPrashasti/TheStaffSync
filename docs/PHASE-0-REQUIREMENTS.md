@@ -244,6 +244,6 @@ Each backend phase ends with the 12-point API Integration Checkpoint (brief §26
 | Approved leave re-approved / double-processed | Status transition enforced atomically with `findOneAndUpdate({ _id, status: 'pending' }, ...)` — not check-then-save |
 | Invalid ObjectId crashes to 500 | Central error handler maps `CastError` → 404/400 |
 | Mongoose `populate` on deleted users → null crashes | Soft deletes + defensive population handling |
-| No HR account exists to bootstrap the system | Documented seed script in Phase 6 |
+| No HR account exists to bootstrap the system | Documented seed script (brought forward to Phase 5 so RBAC could be proven) |
 | Secrets committed | `.gitignore` written in Phase 1 before any `.env` exists |
 | "Looks done" frontend hiding broken APIs | Backend-first order (phases 4–11 before 12–13) + no-mock rule |

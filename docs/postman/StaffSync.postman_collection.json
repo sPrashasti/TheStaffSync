@@ -529,7 +529,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer not.a.realtoken"
+                "value": "Bearer {{invalidToken}}"
               }
             ],
             "url": "{{baseUrl}}/auth/me"
@@ -563,6 +563,525 @@
           }
         }
       ]
+    },
+    {
+      "name": "02 RBAC",
+      "item": [
+        {
+          "name": "Login as HR",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('hrEmail')) throw new Error('Set hrEmail in the StaffSync Local environment (see README, Testing with Postman).');",
+                  "if (!pm.environment.get('hrPassword')) throw new Error('Set hrPassword in the StaffSync Local environment (see README, Testing with Postman).');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('role is hr', () => pm.expect(body.data.user.role).to.eql('hr'));",
+                  "pm.environment.set('hrToken', body.data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{hrEmail}}\",\n  \"password\": \"{{hrPassword}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login as manager",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('managerEmail')) throw new Error('Set managerEmail in the StaffSync Local environment (see README, Testing with Postman).');",
+                  "if (!pm.environment.get('managerPassword')) throw new Error('Set managerPassword in the StaffSync Local environment (see README, Testing with Postman).');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('role is manager', () => pm.expect(body.data.user.role).to.eql('manager'));",
+                  "pm.environment.set('managerToken', body.data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{managerEmail}}\",\n  \"password\": \"{{managerPassword}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "HR lists employees",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('paginated shape', () => { pm.expect(body.data.items).to.be.an('array'); pm.expect(body.data).to.include.keys('page', 'limit', 'total', 'totalPages'); });",
+                  "pm.test('includes seeded accounts', () => pm.expect(body.data.total).to.be.at.least(5));",
+                  "pm.test('user details populated', () => pm.expect(body.data.items[0].userId).to.include.keys('name', 'email', 'role'));",
+                  "pm.test('password never returned', () => pm.expect(pm.response.text()).to.not.include('password'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees"
+          }
+        },
+        {
+          "name": "HR filters employees by role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('at least one manager', () => pm.expect(body.data.items.length).to.be.at.least(1));",
+                  "pm.test('only managers returned', () => body.data.items.forEach((e) => pm.expect(e.userId.role).to.eql('manager')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees?role=manager"
+          }
+        },
+        {
+          "name": "HR filters employees by department",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('only Engineering returned', () => body.data.items.forEach((e) => pm.expect(e.department).to.eql('Engineering')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees?department=Engineering"
+          }
+        },
+        {
+          "name": "HR paginates employees",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('at most 2 items', () => pm.expect(body.data.items.length).to.be.at.most(2));",
+                  "pm.test('totalPages matches', () => pm.expect(body.data.totalPages).to.eql(Math.ceil(body.data.total / 2)));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees?limit=2&page=1"
+          }
+        },
+        {
+          "name": "HR filters employees by active status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('only active accounts returned', () => body.data.items.forEach((e) => pm.expect(e.userId.isActive).to.eql(true)));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees?isActive=true"
+          }
+        },
+        {
+          "name": "Invalid role filter returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Validation failed\"));",
+                  "pm.test('role error reported', () => pm.expect(body.errors[0].field).to.eql('role'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees?role=admin"
+          }
+        },
+        {
+          "name": "Manager cannot list all employees",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees"
+          }
+        },
+        {
+          "name": "Employee cannot list all employees",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees"
+          }
+        },
+        {
+          "name": "List employees without token returns 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Not authenticated. Please log in.\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/employees"
+          }
+        },
+        {
+          "name": "Manager views own profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('is the manager', () => pm.expect(body.data.userId.role).to.eql('manager'));",
+                  "pm.environment.set('managerEmployeeId', body.data._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/me"
+          }
+        },
+        {
+          "name": "Manager views own team",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('team is not empty', () => pm.expect(body.data.length).to.be.at.least(1));",
+                  "pm.test('every member reports to this manager', () => body.data.forEach((e) => pm.expect(e.managerId).to.eql(pm.environment.get('managerEmployeeId'))));",
+                  "pm.test('employee outside the team is excluded', () => pm.expect(body.data.map((e) => e.userId.email)).to.not.include('employee3@staffsync.demo'));",
+                  "pm.test('password never returned', () => pm.expect(pm.response.text()).to.not.include('password'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/team"
+          }
+        },
+        {
+          "name": "Employee cannot view a team",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/team"
+          }
+        },
+        {
+          "name": "HR cannot use the manager team view",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/team"
+          }
+        },
+        {
+          "name": "Employee views own profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('is the registered employee', () => pm.expect(body.data.userId.email).to.eql(pm.collectionVariables.get('regEmail')));",
+                  "pm.test('password never returned', () => pm.expect(pm.response.text()).to.not.include('password'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/me"
+          }
+        },
+        {
+          "name": "HR views own profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('is HR', () => pm.expect(body.data.userId.role).to.eql('hr'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/me"
+          }
+        },
+        {
+          "name": "Own profile without token returns 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Not authenticated. Please log in.\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/employees/me"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "invalidToken",
+      "value": "not.a.realtoken",
+      "type": "string",
+      "description": "Deliberately invalid token used to test the 401 response. Not a secret."
     }
   ]
 }
