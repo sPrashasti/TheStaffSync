@@ -136,7 +136,8 @@
                   "pm.test('role is employee', () => pm.expect(body.data.user.role).to.eql('employee'));",
                   "pm.test('employee profile created', () => { pm.expect(body.data.employee.employeeId).to.match(/^EMP\\d{4,}$/); pm.expect(body.data.employee.userId).to.eql(body.data.user._id); });",
                   "pm.test('password never returned', () => pm.expect(JSON.stringify(body)).to.not.include('password'));",
-                  "pm.environment.set('employeeToken', body.data.token);"
+                  "pm.environment.set('employeeToken', body.data.token);",
+                  "pm.environment.set('regEmployeeId', body.data.employee._id);"
                 ]
               }
             }
@@ -1826,6 +1827,668 @@
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{newEmpEmail}}\",\n  \"password\": \"{{newEmpPassword}}\"\n}"
             }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Attendance",
+      "item": [
+        {
+          "name": "HR creates attendance test employee",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('attEmail', 'postman+att' + Date.now() + '@staffsync.test');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.environment.set('attEmployeeId', body.data._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Attendance\",\n  \"email\": \"{{attEmail}}\",\n  \"password\": \"Passw0rd123\",\n  \"department\": \"Engineering\",\n  \"designation\": \"Engineer\",\n  \"managerId\": \"{{managerEmployeeId}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Attendance employee logs in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.environment.set('attToken', body.data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{attEmail}}\",\n  \"password\": \"Passw0rd123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Today before check-in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('no record yet', () => pm.expect(body.data.record).to.eql(null));",
+                  "pm.test('server date returned', () => pm.expect(body.data.date).to.match(/^\\d{4}-\\d{2}-\\d{2}$/));",
+                  "pm.environment.set('attDate', body.data.date);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{attToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance/today"
+          }
+        },
+        {
+          "name": "Check out before check-in returns 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You have not checked in today\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{attToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance/check-out"
+          }
+        },
+        {
+          "name": "Check in with client time returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('checkIn: Unknown field', () => pm.expect(body.errors).to.deep.include({ field: 'checkIn', message: \"Unknown field\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{attToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance/check-in",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"checkIn\": \"2020-01-01T09:00:00Z\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Check in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Checked in\"));",
+                  "pm.test('dated today', () => pm.expect(body.data.date).to.eql(pm.environment.get('attDate')));",
+                  "pm.test('checked in, not out', () => { pm.expect(body.data.checkIn).to.be.a('string'); pm.expect(body.data.checkOut).to.eql(null); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{attToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance/check-in"
+          }
+        },
+        {
+          "name": "Check in again returns 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You have already checked in today\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{attToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance/check-in"
+          }
+        },
+        {
+          "name": "Today after check-in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('record present', () => pm.expect(body.data.record.date).to.eql(pm.environment.get('attDate')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{attToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance/today"
+          }
+        },
+        {
+          "name": "Check out",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Checked out\"));",
+                  "pm.test('check-out recorded', () => pm.expect(body.data.checkOut).to.be.a('string'));",
+                  "pm.test('working hours calculated', () => pm.expect(body.data.workingHours).to.be.a('number').and.at.least(0));",
+                  "pm.test('short day is a half day', () => pm.expect(body.data.status).to.eql('half-day'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{attToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance/check-out"
+          }
+        },
+        {
+          "name": "Check out again returns 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You have already checked out today\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{attToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance/check-out"
+          }
+        },
+        {
+          "name": "My attendance",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('paginated', () => pm.expect(body.data).to.include.keys('items', 'page', 'limit', 'total', 'totalPages'));",
+                  "pm.test(\"includes today's record\", () => pm.expect(body.data.items[0].date).to.eql(pm.environment.get('attDate')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{attToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance/my"
+          }
+        },
+        {
+          "name": "My attendance for a date range",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('one day', () => pm.expect(body.data.total).to.eql(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{attToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance/my?from={{attDate}}&to={{attDate}}"
+          }
+        },
+        {
+          "name": "My attendance with to before from returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('to: to must be on or after from', () => pm.expect(body.errors).to.deep.include({ field: 'to', message: \"to must be on or after from\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{attToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance/my?from=2026-09-30&to=2026-09-01"
+          }
+        },
+        {
+          "name": "My attendance with impossible date returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('date: date must be a date in YYYY-MM-DD format', () => pm.expect(body.errors).to.deep.include({ field: 'date', message: \"date must be a date in YYYY-MM-DD format\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{attToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance/my?date=2026-02-30"
+          }
+        },
+        {
+          "name": "My attendance cannot ask for someone else's",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('employeeId: Unknown field', () => pm.expect(body.errors).to.deep.include({ field: 'employeeId', message: \"Unknown field\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{attToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance/my?employeeId={{newEmployeeId}}"
+          }
+        },
+        {
+          "name": "Manager views team attendance for today",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('includes the new team member', () => pm.expect(body.data.items.map((i) => i.employeeId._id)).to.include(pm.environment.get('attEmployeeId')));",
+                  "pm.test('employee details populated', () => pm.expect(body.data.items[0].employeeId.userId).to.include.keys('name', 'email'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance/team?date={{attDate}}"
+          }
+        },
+        {
+          "name": "Manager filters team to one member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('only that member', () => body.data.items.forEach((i) => pm.expect(i.employeeId._id).to.eql(pm.environment.get('attEmployeeId'))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance/team?employeeId={{attEmployeeId}}"
+          }
+        },
+        {
+          "name": "Manager cannot view non-member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"That employee is not in your team\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance/team?employeeId={{regEmployeeId}}"
+          }
+        },
+        {
+          "name": "Employee cannot view team attendance",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{attToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance/team"
+          }
+        },
+        {
+          "name": "HR views all attendance for today",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('includes the new record', () => pm.expect(body.data.items.map((i) => i.employeeId._id)).to.include(pm.environment.get('attEmployeeId')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance?date={{attDate}}"
+          }
+        },
+        {
+          "name": "HR filters by department and status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('only matching records', () => body.data.items.forEach((i) => { pm.expect(i.employeeId.department).to.eql('Engineering'); pm.expect(i.status).to.eql('half-day'); }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance?department=Engineering&status=half-day&date={{attDate}}"
+          }
+        },
+        {
+          "name": "Manager cannot view all attendance",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance"
+          }
+        },
+        {
+          "name": "Employee cannot view all attendance",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{attToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance"
+          }
+        },
+        {
+          "name": "Check in without token returns 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Not authenticated. Please log in.\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/attendance/check-in"
           }
         }
       ]

@@ -5,6 +5,7 @@ const { mountedPaths } = app;
 const { connectDB, disconnectDB } = require('./config/db');
 const { allowedOrigins } = require('./config/cors');
 const { assertJwtConfig } = require('./utils/token');
+const { assertTimeZone, getTimeZone } = require('./utils/dates');
 
 // Registers every model so Mongoose builds their indexes on connect.
 require('./models');
@@ -14,6 +15,7 @@ const PORT = process.env.PORT || 5000;
 const start = async () => {
   try {
     assertJwtConfig();
+    assertTimeZone();
   } catch (err) {
     console.error(`Configuration error: ${err.message}`);
     process.exit(1);
@@ -29,6 +31,7 @@ const start = async () => {
   const server = app.listen(PORT, () => {
     console.log(`StaffSync API listening on http://localhost:${PORT} (${process.env.NODE_ENV || 'development'})`);
     console.log(`CORS allowed origins: ${allowedOrigins.join(', ') || '(none configured)'}`);
+    console.log(`Attendance time zone: ${getTimeZone()}`);
     if (process.env.NODE_ENV !== 'production') {
       console.log(`Mounted routes: ${mountedPaths.join(', ')}`);
     }

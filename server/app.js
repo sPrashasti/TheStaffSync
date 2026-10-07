@@ -6,6 +6,7 @@ const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 const healthRoutes = require('./routes/healthRoutes');
 const authRoutes = require('./routes/authRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
+const attendanceRoutes = require('./routes/attendanceRoutes');
 
 const app = express();
 
@@ -19,6 +20,7 @@ const routes = [
   ['/api/health', healthRoutes],
   ['/api/auth', authRoutes],
   ['/api/employees', employeeRoutes],
+  ['/api/attendance', attendanceRoutes],
 ];
 routes.forEach(([path, router]) => app.use(path, router));
 
