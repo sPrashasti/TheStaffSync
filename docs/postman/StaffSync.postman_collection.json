@@ -1035,7 +1035,8 @@
                 "exec": [
                   "const body = pm.response.json();",
                   "pm.test('Status is 200', () => pm.response.to.have.status(200));",
-                  "pm.test('is HR', () => pm.expect(body.data.userId.role).to.eql('hr'));"
+                  "pm.test('is HR', () => pm.expect(body.data.userId.role).to.eql('hr'));",
+                  "pm.environment.set('hrEmployeeId', body.data._id);"
                 ]
               }
             }
@@ -1071,6 +1072,760 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/employees/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Employees",
+      "item": [
+        {
+          "name": "HR creates employee in manager team",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('newEmpEmail', 'postman+emp' + Date.now() + '@staffsync.test');",
+                  "pm.collectionVariables.set('newEmpPassword', 'Passw0rd123');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Employee created\"));",
+                  "pm.test('employee id assigned', () => pm.expect(body.data.employeeId).to.match(/^EMP\\d{4,}$/));",
+                  "pm.test('role and manager set', () => { pm.expect(body.data.userId.role).to.eql('employee'); pm.expect(body.data.managerId._id).to.eql(pm.environment.get('managerEmployeeId')); });",
+                  "pm.test('password never returned', () => pm.expect(pm.response.text()).to.not.include('password'));",
+                  "pm.environment.set('newEmployeeId', body.data._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman New Hire\",\n  \"email\": \"{{newEmpEmail}}\",\n  \"password\": \"{{newEmpPassword}}\",\n  \"role\": \"employee\",\n  \"department\": \"Engineering\",\n  \"designation\": \"Graduate Engineer\",\n  \"joiningDate\": \"2026-09-01\",\n  \"managerId\": \"{{managerEmployeeId}}\",\n  \"phone\": \"+44 7700 900123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "New employee logs in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.environment.set('newEmployeeToken', body.data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{newEmpEmail}}\",\n  \"password\": \"{{newEmpPassword}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create with duplicate email returns 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"An account with this email already exists\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Dup\",\n  \"email\": \"{{newEmpEmail}}\",\n  \"password\": \"Passw0rd123\",\n  \"department\": \"Engineering\",\n  \"designation\": \"Engineer\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create with unknown fields returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('isActive: Unknown field', () => pm.expect(body.errors).to.deep.include({ field: 'isActive', message: \"Unknown field\" }));",
+                  "pm.test('employeeId: Unknown field', () => pm.expect(body.errors).to.deep.include({ field: 'employeeId', message: \"Unknown field\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"X\",\n  \"email\": \"x@staffsync.test\",\n  \"password\": \"Passw0rd123\",\n  \"department\": \"a\",\n  \"designation\": \"b\",\n  \"isActive\": false,\n  \"employeeId\": \"EMP9999\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create with non-manager as manager returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('managerId: The selected person is not a manager', () => pm.expect(body.errors).to.deep.include({ field: 'managerId', message: \"The selected person is not a manager\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"X\",\n  \"email\": \"x@staffsync.test\",\n  \"password\": \"Passw0rd123\",\n  \"department\": \"a\",\n  \"designation\": \"b\",\n  \"managerId\": \"{{newEmployeeId}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create with missing fields returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('email error reported', () => pm.expect(body.errors.map((e) => e.field)).to.include('email'));",
+                  "pm.test('password error reported', () => pm.expect(body.errors.map((e) => e.field)).to.include('password'));",
+                  "pm.test('department error reported', () => pm.expect(body.errors.map((e) => e.field)).to.include('department'));",
+                  "pm.test('designation error reported', () => pm.expect(body.errors.map((e) => e.field)).to.include('designation'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"X\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Manager cannot create employees",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"X\",\n  \"email\": \"x@staffsync.test\",\n  \"password\": \"Passw0rd123\",\n  \"department\": \"a\",\n  \"designation\": \"b\"\n}"
+            }
+          }
+        },
+        {
+          "name": "HR reads employee by id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('correct employee', () => pm.expect(body.data.userId.email).to.eql(pm.collectionVariables.get('newEmpEmail')));",
+                  "pm.test('password never returned', () => pm.expect(pm.response.text()).to.not.include('password'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/{{newEmployeeId}}"
+          }
+        },
+        {
+          "name": "Manager reads own team member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/{{newEmployeeId}}"
+          }
+        },
+        {
+          "name": "Employee reads own record by id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{newEmployeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/{{newEmployeeId}}"
+          }
+        },
+        {
+          "name": "Other employee cannot read it",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/{{newEmployeeId}}"
+          }
+        },
+        {
+          "name": "Unknown id returns 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Employee not found\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/64b7f0000000000000000000"
+          }
+        },
+        {
+          "name": "Malformed id returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('id: Invalid id', () => pm.expect(body.errors).to.deep.include({ field: 'id', message: \"Invalid id\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/not-an-id"
+          }
+        },
+        {
+          "name": "Employee updates own phone and address",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Employee updated\"));",
+                  "pm.test('saved', () => { pm.expect(body.data.phone).to.eql('+44 7700 900456'); pm.expect(body.data.address).to.eql('10 Downing Street, London'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{newEmployeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/{{newEmployeeId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+44 7700 900456\",\n  \"address\": \"10 Downing Street, London\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Employee cannot change own department or role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You can only update your own phone and address\"));",
+                  "pm.test('department: Only HR can change this field', () => pm.expect(body.errors).to.deep.include({ field: 'department', message: \"Only HR can change this field\" }));",
+                  "pm.test('role: Only HR can change this field', () => pm.expect(body.errors).to.deep.include({ field: 'role', message: \"Only HR can change this field\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{newEmployeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/{{newEmployeeId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"department\": \"Executive\",\n  \"role\": \"hr\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Employee cannot edit someone else",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/{{newEmployeeId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+44 7700 900000\"\n}"
+            }
+          }
+        },
+        {
+          "name": "HR updates employment details",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('saved', () => { pm.expect(body.data.designation).to.eql('Software Engineer'); pm.expect(body.data.userId.name).to.eql('Postman Engineer'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/{{newEmployeeId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"department\": \"Engineering\",\n  \"designation\": \"Software Engineer\",\n  \"name\": \"Postman Engineer\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Manager cannot be their own manager",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('managerId: An employee cannot be their own manager', () => pm.expect(body.errors).to.deep.include({ field: 'managerId', message: \"An employee cannot be their own manager\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/{{managerEmployeeId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"managerId\": \"{{managerEmployeeId}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Demoting a manager with a team returns 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('asks to reassign the team', () => pm.expect(body.message).to.match(/^Reassign this manager's \\d+ team member\\(s\\) to another manager first$/));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/{{managerEmployeeId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"employee\"\n}"
+            }
+          }
+        },
+        {
+          "name": "HR cannot deactivate own account",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You cannot change your own role or deactivate your own account\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/{{hrEmployeeId}}"
+          }
+        },
+        {
+          "name": "Employee cannot deactivate anyone",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/{{newEmployeeId}}"
+          }
+        },
+        {
+          "name": "HR deactivates employee",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Employee deactivated\"));",
+                  "pm.test('account inactive', () => pm.expect(body.data.userId.isActive).to.eql(false));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/{{newEmployeeId}}"
+          }
+        },
+        {
+          "name": "Deactivated employee token is rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"This account has been deactivated.\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{newEmployeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "Deactivated employee cannot log in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"This account has been deactivated. Contact HR.\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{newEmpEmail}}\",\n  \"password\": \"{{newEmpPassword}}\"\n}"
+            }
           }
         }
       ]

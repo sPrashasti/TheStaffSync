@@ -7,10 +7,12 @@ const validate = (req, res, next) => {
   const result = validationResult(req);
   if (result.isEmpty()) return next();
 
-  const errors = result.array({ onlyFirstError: true }).map((err) => ({
-    field: err.path,
-    message: err.msg,
-  }));
+  const errors = result.array({ onlyFirstError: true }).flatMap((err) =>
+    // checkExact() reports every unexpected field in one error; list them individually.
+    err.type === 'unknown_fields'
+      ? err.fields.map((f) => ({ field: f.path, message: 'Unknown field' }))
+      : [{ field: err.path, message: err.msg }]
+  );
   return next(new AppError('Validation failed', 400, errors));
 };
 

@@ -14,8 +14,9 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | 3 | Backend foundation: response helpers, error mapping, validation | ✅ Complete |
 | 4 | Authentication (register, login, JWT) | ✅ Complete |
 | 5 | Role-based access control, seed script, employee read endpoints | ✅ Complete |
-| 6 | Employee management (create, update, deactivate) | ⏳ Next |
-| 7–11 | Backend modules (attendance, leave, HR, announcements, training, notifications) | Planned |
+| 6 | Employee management (create, update, deactivate) | ✅ Complete |
+| 7 | Attendance (check-in, check-out, history) | ⏳ Next |
+| 8–11 | Backend modules (leave, HR, announcements, training, notifications) | Planned |
 | 12–13 | Frontend integration + dashboards | Planned |
 | 14–18 | Testing, security hardening, optimisation, deployment | Planned |
 
@@ -252,6 +253,10 @@ const getExample = async (req, res) => {
 | GET | `/api/employees` | Yes | hr | 200 | 400, 401, 403 |
 | GET | `/api/employees/team` | Yes | manager | 200 | 401, 403, 404 |
 | GET | `/api/employees/me` | Yes | any | 200 | 401, 404 |
+| GET | `/api/employees/:id` | Yes | hr, the employee, their manager | 200 | 400, 401, 403, 404 |
+| POST | `/api/employees` | Yes | hr | 201 | 400, 401, 403, 409 |
+| PUT | `/api/employees/:id` | Yes | hr (any field); the employee (own phone and address only) | 200 | 400, 401, 403, 404, 409 |
+| DELETE | `/api/employees/:id` | Yes | hr | 200 | 400, 401, 403, 404, 409 |
 
 More endpoints are added and documented phase by phase; the full planned list is in [docs/PHASE-0-REQUIREMENTS.md](docs/PHASE-0-REQUIREMENTS.md#5-api-endpoint-list).
 
@@ -372,6 +377,67 @@ Paginated list of all employees with their account details. Optional query param
 
 **200** `Employee profile`, the caller's own employee record with account and manager details. **404** if the account has no employee profile.
 
+`:id` in the endpoints below is the **employee record's** `_id` (as returned in `data._id`), not the user id or the `EMP0001` code.
+
+### GET /api/employees/:id
+
+Allowed for HR, the employee themselves, and their **direct** manager. Anyone else gets **403**. **404** `Employee not found`.
+
+### POST /api/employees (hr)
+
+Creates the login account and the employee profile together, in one transaction. HR can create any role, including `manager` and `hr`.
+
+```json
+{
+  "name": "Ravi Patel",
+  "email": "ravi@example.com",
+  "password": "Passw0rd123",
+  "role": "employee",
+  "department": "Engineering",
+  "designation": "Software Engineer",
+  "joiningDate": "2026-09-01",
+  "managerId": "<manager's employee _id>",
+  "phone": "+44 7700 900123",
+  "address": "1 High Street, London",
+  "dateOfBirth": "1998-04-12"
+}
+```
+
+| Field | Rules |
+|---|---|
+| `name`, `email`, `password` | Required; same rules as registration |
+| `role` | `employee` (default), `manager` or `hr` |
+| `department`, `designation` | Required, up to 100 characters |
+| `joiningDate` | `YYYY-MM-DD`; defaults to today |
+| `dateOfBirth` | `YYYY-MM-DD`, in the past |
+| `managerId` | Employee `_id` of an **active manager** |
+| `phone` | 7–20 digits, spaces, `-`, optional leading `+` |
+| `address` | Up to 300 characters |
+
+Any other field, such as `isActive` or `employeeId`, is rejected with **400** `Unknown field`. **201** `Employee created` · **409** if the email is taken.
+
+### PUT /api/employees/:id
+
+Send only the fields to change. `null` clears `phone`, `address`, `dateOfBirth` or `managerId`.
+
+- **HR** may change `name`, `email`, `role`, `isActive` and every profile field above. Passwords cannot be changed here.
+- **Anyone else** may change only their **own** `phone` and `address`. Sending another field gives **403** `You can only update your own phone and address`, with the disallowed fields listed in `errors`, and nothing is saved.
+
+### DELETE /api/employees/:id (hr)
+
+**Deactivates** the account (`isActive: false`) instead of deleting it, so attendance, leave and other history keep pointing at a real person. The user's tokens stop working immediately and they cannot log in. Running it again on an inactive account is harmless. To reactivate, use `PUT` with `{ "isActive": true }`.
+
+### Employee management rules
+
+| Rule | Response |
+|---|---|
+| `managerId` must belong to an active user with the `manager` role | 400 |
+| Nobody can be their own manager, and reporting lines cannot loop (A → B → A) | 400 |
+| HR cannot change their own role or deactivate themselves | 400 |
+| There must always be at least one active HR account | 409 |
+| A manager cannot be demoted while anyone reports to them, or deactivated while an active employee reports to them; reassign the team first | 409 |
+| Email must stay unique | 409 |
+
 ## CORS configuration
 
 The API only accepts browser requests from origins listed in `CLIENT_URL`.
@@ -391,7 +457,7 @@ Symptom of a CORS misconfiguration: the request works in Postman but the browser
 3. Click the environment's eye icon and fill in **hrPassword** and **managerPassword**. These are `SEED_HR_PASSWORD` and `SEED_DEMO_PASSWORD` from `server/.env`. Run `npm run seed:demo` first if you haven't. The passwords stay in your local Postman only; the committed environment file leaves them blank.
 4. Open the collection, choose **Run collection**, and run it with the backend started.
 
-Every request carries automated assertions. Expected result: **36 requests, 114 assertions, 0 failures**.
+Every request carries automated assertions. Expected result: **60 requests, 171 assertions, 0 failures**.
 
 **00 Health**
 
@@ -433,6 +499,27 @@ Each run registers two new `postman+<timestamp>@staffsync.test` accounts in your
 | Each role views own profile | 200 |
 | Own profile without token | 401 |
 
+**03 Employees** (creates one `postman+emp<timestamp>@staffsync.test` employee per run in the demo manager's team and deactivates it at the end)
+
+| Request | Expected |
+|---|---|
+| HR creates employee in manager team | 201, `EMP…` id, manager set, no password |
+| Create with duplicate email / unknown fields / non-manager as manager / missing fields | 409 / 400 |
+| Manager creates employee | 403 |
+| HR, their manager, the employee themselves read by id | 200 |
+| Another employee reads by id | 403 |
+| Unknown id / malformed id | 404 / 400 |
+| Employee updates own phone and address | 200 |
+| Employee changes own department or role | 403, fields listed, nothing saved |
+| Employee edits someone else | 403 |
+| HR updates employment details | 200 |
+| Manager as own manager | 400 |
+| Demote a manager who has a team | 409 |
+| HR deactivates own account | 400 |
+| Employee deactivates someone | 403 |
+| HR deactivates employee | 200, `isActive: false` |
+| Deactivated employee's token / login | 401 |
+
 From the command line (no Postman install needed):
 
 ```bash
@@ -452,6 +539,8 @@ npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/St
 | 403 `You do not have permission…` | The logged-in role is not allowed on that endpoint — see the API reference |
 | 404 `No employee profile exists for this account` | The user has no Employee record; register through the API or the seed script rather than inserting users by hand |
 | `Seed failed: … is not set` | Add the `SEED_*` variables to `server/.env` |
+| 400 `Unknown field` | The request body has a field that endpoint does not accept; check the field name or remove it |
+| 409 `Reassign this manager's … team member(s)…` | Move their reports to another manager with `PUT /api/employees/:id { "managerId": … }` first |
 | `Port 5000 is already in use` | Another process (or a second server terminal) is using the port — stop it or change `PORT` |
 | Page says "Unable to reach the server" | Backend not running, or `VITE_API_URL` wrong — restart Vite after editing `client/.env` |
 | `VITE_API_URL is not set` error in the browser | `client/.env` missing |
@@ -459,7 +548,7 @@ npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/St
 
 ## Known limitations (current phase)
 
-- Employees can only be read so far; HR create, update and deactivate arrive in Phase 6. Until then, manager accounts come from `npm run seed:demo`.
+- No password change or reset endpoint yet.
 - No rate limiting on login yet (security hardening, Phase 15).
 - No logout endpoint: tokens are stateless, so the client logs out by discarding the token. Deactivating a user blocks their tokens immediately.
 - The frontend is a single connection-check page; routing and role dashboards arrive in Phases 12–13.
