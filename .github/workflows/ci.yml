@@ -1,0 +1,56 @@
+# Runs on every push and pull request: client lint, tests and build, and the full API test suite
+# against a throwaway MongoDB (a single-node replica set, because the app uses transactions).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  client:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Start MongoDB (replica set)
+        working-directory: .
+        run: |
+          docker run -d --name mongo -p 27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          for i in $(seq 1 30); do docker exec mongo mongosh --quiet --eval "db.adminCommand('ping')" && break; sleep 1; done
+          docker exec mongo mongosh --quiet --eval "rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27017' }] })"
+          for i in $(seq 1 30); do docker exec mongo mongosh --quiet --eval "db.hello().isWritablePrimary" | grep -q true && break; sleep 1; done
+
+      - name: Test settings
+        run: |
+          echo "TEST_MONGO_URI=mongodb://localhost:27017/?replicaSet=rs0&directConnection=true" >> "$GITHUB_ENV"
+          echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "CLIENT_URL=http://localhost:5173" >> "$GITHUB_ENV"
+
+      - run: npm ci
+      - run: npm test

@@ -11,9 +11,9 @@ const hashToken = (token) => crypto.createHash('sha256').update(token).digest('h
 // Names come from user input, so they are escaped before going into the HTML email.
 const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-// Where the frontend lives: APP_URL, or the first CLIENT_URL origin.
+// Where the frontend lives: APP_URL, the first CLIENT_URL origin, or Render's public address.
 const appUrl = () => {
-  const configured = process.env.APP_URL || (process.env.CLIENT_URL || '').split(',')[0];
+  const configured = process.env.APP_URL || (process.env.CLIENT_URL || '').split(',')[0] || process.env.RENDER_EXTERNAL_URL;
   return (configured || 'http://localhost:5173').trim().replace(/\/$/, '');
 };
 

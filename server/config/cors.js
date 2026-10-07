@@ -1,8 +1,14 @@
-// Only origins listed in CLIENT_URL may call the API from a browser.
-const allowedOrigins = (process.env.CLIENT_URL || '')
-  .split(',')
-  .map((origin) => origin.trim().replace(/\/$/, ''))
-  .filter(Boolean);
+// Only origins listed in CLIENT_URL may call the API from a browser. When this server also serves
+// the frontend, its own public address (APP_URL, or RENDER_EXTERNAL_URL which Render sets
+// automatically) is allowed too.
+const allowedOrigins = [...new Set(
+  [process.env.CLIENT_URL, process.env.APP_URL, process.env.RENDER_EXTERNAL_URL]
+    .filter(Boolean)
+    .join(',')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean)
+)];
 
 const corsOptions = {
   origin(origin, callback) {

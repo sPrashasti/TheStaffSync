@@ -1,0 +1,47 @@
+# Render blueprint: one web service runs the API and serves the built React app on one address.
+# Deploy: Render dashboard → New → Blueprint → connect this GitHub repository.
+# Full steps: docs/DEPLOYMENT.md
+services:
+  - type: web
+    name: staffsync
+    runtime: node
+    plan: free
+    # Pick the region nearest your MongoDB Atlas cluster (every request talks to the database).
+    region: singapore
+    # Dev dependencies are needed to build the client (Vite), so include them there.
+    buildCommand: npm ci --prefix server --omit=dev && npm ci --prefix client --include=dev && npm run build --prefix client
+    startCommand: npm start --prefix server
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      # Render puts one proxy in front of the app; needed for correct rate limiting.
+      - key: TRUST_PROXY
+        value: "1"
+      - key: TIMEZONE
+        value: Asia/Kolkata
+      - key: WORKING_DAYS
+        value: Mon,Tue,Wed,Thu,Fri
+      - key: JWT_EXPIRES_IN
+        value: 1d
+      # A long random secret, generated once by Render.
+      - key: JWT_SECRET
+        generateValue: true
+      # Set these in the dashboard when Render asks (they are secrets or depend on your accounts).
+      - key: MONGO_URI
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      # CLIENT_URL / APP_URL are optional: the service's own address (RENDER_EXTERNAL_URL) is used
+      # automatically for CORS and reset links. Set them if you add a custom domain.

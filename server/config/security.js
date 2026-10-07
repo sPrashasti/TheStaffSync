@@ -15,6 +15,26 @@ const securityHeaders = helmet({
   contentSecurityPolicy: { directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] } },
 });
 
+// Headers for the web app's pages when this server also serves the frontend. Scripts may come
+// only from this site (no inline scripts at all), which is what keeps a stolen-token XSS from
+// running. Styles allow 'unsafe-inline' because Material UI injects its CSS at runtime.
+const pageSecurityHeaders = helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+      imgSrc: ["'self'", 'data:'],
+      connectSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+    },
+  },
+});
+
 // API responses contain personal data; browsers and proxies must not keep copies.
 const noStore = (req, res, next) => {
   res.set('Cache-Control', 'no-store');
@@ -129,6 +149,7 @@ const getLimiters = () => {
 
 module.exports = {
   securityHeaders,
+  pageSecurityHeaders,
   noStore,
   rejectRepeatedQuery,
   getLimiters,

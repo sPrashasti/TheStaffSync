@@ -26,7 +26,7 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | 15 | Security hardening | ✅ Complete |
 | 16 | Pagination and measured optimisation | ✅ Complete |
 | 17 | Full acceptance check ([docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)) | ✅ 29/30 automated; browser walkthrough pending |
-| 18 | Deployment | ⏳ Next |
+| 18 | Deployment configuration ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)) | ✅ Ready; live deployment needs your Render account |
 
 ## Tech stack
 
@@ -68,10 +68,14 @@ TheStaffSync/
 │   ├── src/utils/              Formatting (British, 24-hour), labels, safe localStorage
 │   ├── src/theme.js            Material UI theme
 │   └── .env.example
+├── render.yaml                 Render blueprint (one web service)
+├── package.json                Root build/start scripts for hosting
+├── .github/workflows/ci.yml    Lint, tests and build on every push
 └── docs/
     ├── PHASE-0-REQUIREMENTS.md
     ├── ACCEPTANCE.md           Phase 17 acceptance check: 30 criteria with evidence
     ├── E2E-CHECKLIST.md        Manual browser walkthrough for all roles
+    ├── DEPLOYMENT.md           Step-by-step deployment (Render + Atlas)
     └── postman/                Postman collection + environment
 ```
 
@@ -902,7 +906,7 @@ Symptom of a CORS misconfiguration: the request works in Postman but the browser
 
 There are three layers of tests, from fastest to most realistic.
 
-**1. API test suite** (`server`, 129 tests, about 30 seconds)
+**1. API test suite** (`server`, 133 tests, about 30 seconds)
 
 ```bash
 cd server
@@ -925,6 +929,7 @@ npm test
 | `notifications.test.js` | Who is notified for each event, read/read-all, failures never blocking the action |
 | `password-reset.test.js` | Same reply for unknown emails, emailed single-use link, hashed token, expiry, newer link cancels older, sessions revoked, deactivated accounts, limits, production without email |
 | `security.test.js` | Headers, CORS, repeated parameters, operator injection, ignored privilege fields, sign-up and failed-login limits, password change revoking old tokens, production config, no password hashes in responses |
+| `client-app.test.js` | Production page serving: strict page CSP, deep links, asset caching, API kept as JSON |
 | `acceptance-endpoints.test.js` | Every endpoint planned in the requirements (41) is mounted, open to the roles allowed and refused to a role that is not |
 | `leave-workflow.e2e.test.js` | **End to end:** HR creates a manager → employee registers → HR places them in the team → employee applies → manager notified and approves → employee notified → HR sees the same record and totals → rejection path → deactivation keeps history |
 
@@ -1103,6 +1108,28 @@ npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/St
   --env-var "hrPassword=<SEED_HR_PASSWORD>" --env-var "managerPassword=<SEED_DEMO_PASSWORD>"
 ```
 
+## Deployment
+
+In production StaffSync runs as **one service**: the Express server also serves the built React app (`client/dist`), so the app and API share one address.
+
+| Path | Served as |
+|---|---|
+| `/api/…` | The API, with its strict "allow nothing" CSP, `no-store` and rate limits. Unknown API paths are JSON 404s |
+| `/assets/…` | Built JS/CSS with hashed names, cached for a year |
+| Any other address | `index.html` (never cached), so deep links like `/hr/dashboard` work |
+
+Pages get a strict Content-Security-Policy: scripts only from the site itself, no inline scripts (the theme start-up script is a file for this reason), fonts from Google Fonts, `frame-ancestors 'none'`.
+
+**Deploy:** follow [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). On Render it is *New → Blueprint* from this repository using [render.yaml](render.yaml), then set `MONGO_URI` and seed the first HR account. Any other Node.js host can use `npm run build` and `npm start` from the repository root.
+
+**Continuous integration:** [.github/workflows/ci.yml](.github/workflows/ci.yml) runs client lint, client tests, the production build, and the full API suite against a throwaway MongoDB on every push.
+
+| Setting | Purpose |
+|---|---|
+| `SERVE_CLIENT` | `false` to stop serving the frontend (host it elsewhere); `true` to serve it outside production. Default: on in production when `client/dist` exists |
+| `APP_URL` | The public address, if it is not the Render one (custom domain). Allowed by CORS and used in reset links |
+| `RENDER_EXTERNAL_URL` | Set by Render automatically; used the same way |
+
 ## Troubleshooting
 
 | Symptom | Likely cause |
@@ -1127,7 +1154,7 @@ npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/St
 | `VITE_API_URL is not set` error in the browser | `client/.env` missing |
 | Works in Postman, fails in browser | CORS — see above |
 
-## Known limitations (current phase)
+## Known limitations
 
 - Password reset needs an SMTP account in `.env` before it can email anyone outside development.
 - Absences are calculated in reports, not stored as records. There is no public-holiday calendar yet, so holidays count as absences.
