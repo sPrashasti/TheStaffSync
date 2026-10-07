@@ -10,8 +10,9 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 |---|---|---|
 | 0 | Requirements analysis | ✅ Complete |
 | 1 | Project setup, health check, CORS, centralised Axios | ✅ Complete |
-| 2 | MongoDB connection + Mongoose models | ⏳ Next |
-| 3–11 | Backend modules (auth, RBAC, employees, attendance, leave, HR, announcements, training, notifications) | Planned |
+| 2 | MongoDB connection + Mongoose models | ✅ Complete |
+| 3 | Backend foundation: response helpers, error mapping | ⏳ Next |
+| 4–11 | Backend modules (auth, RBAC, employees, attendance, leave, HR, announcements, training, notifications) | Planned |
 | 12–13 | Frontend integration + dashboards | Planned |
 | 14–18 | Testing, security hardening, optimisation, deployment | Planned |
 
@@ -32,13 +33,15 @@ Planned later: `jsonwebtoken`, `bcryptjs` (Phase 4), `express-validator` (Phase 
 TheStaffSync/
 ├── server/                     Express REST API
 │   ├── config/cors.js          CORS allow-list built from CLIENT_URL
+│   ├── config/db.js            MongoDB connection
 │   ├── controllers/            Request handlers (business logic)
 │   ├── middleware/             Error handling (auth/role/validation added later)
-│   ├── models/                 Mongoose schemas (Phase 2)
+│   ├── models/                 Mongoose schemas — models/index.js loads them all
 │   ├── routes/                 Express routers — each one mounted in app.js
+│   ├── scripts/                Maintenance scripts (index sync)
 │   ├── utils/                  Shared helpers
 │   ├── app.js                  Builds the Express app (middleware + routes)
-│   ├── server.js               Loads .env and starts listening
+│   ├── server.js               Loads .env, connects to MongoDB, then starts listening
 │   └── .env.example
 ├── client/                     React (Vite) frontend
 │   ├── src/services/api.js     The single Axios instance
@@ -56,7 +59,7 @@ TheStaffSync/
 
 - Node.js 20.6 or newer (developed on Node 24)
 - npm
-- MongoDB — required from Phase 2 onwards (local install or a free MongoDB Atlas cluster)
+- MongoDB — a local install or a free MongoDB Atlas cluster
 
 ## Installation
 
@@ -82,7 +85,7 @@ Then edit both `.env` files (see below).
 |---|---|---|
 | `NODE_ENV` | `development` or `production` (production hides stack traces) | `development` |
 | `PORT` | Port the API listens on | `5000` |
-| `MONGO_URI` | MongoDB connection string (Phase 2) | `mongodb://127.0.0.1:27017/staffsync` |
+| `MONGO_URI` | MongoDB connection string | `mongodb://127.0.0.1:27017/staffsync` |
 | `JWT_SECRET` | Secret for signing tokens (Phase 4) — long and random | generate with the command below |
 | `JWT_EXPIRES_IN` | Token lifetime | `1d` |
 | `CLIENT_URL` | Frontend origin(s) allowed by CORS, comma-separated | `http://localhost:5173` |
@@ -111,6 +114,7 @@ Open two terminals.
 # Terminal 1 — backend (restarts automatically on file changes)
 cd server
 npm run dev
+# → MongoDB connected: <host>/<database>
 # → StaffSync API listening on http://localhost:5000 (development)
 # → CORS allowed origins: http://localhost:5173
 
@@ -122,7 +126,50 @@ npm run dev
 
 Open http://localhost:5173. The page calls `GET /api/health` through Axios and shows **"StaffSync API is running"**. If the backend is stopped, it shows **"Unable to reach the server. Check that the API is running."**
 
-`npm run dev` in the server uses Node's built-in `--watch` mode instead of nodemon (one fewer dependency, and nodemon currently pulls in a vulnerable file-watcher package). Use `npm start` for production.
+`npm run dev` in the server uses Node's built-in `--watch` mode instead of nodemon (one fewer dependency, and nodemon currently pulls in a vulnerable file-watcher package). It restarts on code changes but **not** on `.env` changes — stop it with Ctrl+C and run it again after editing `.env`. Use `npm start` for production.
+
+The server connects to MongoDB **before** it starts listening. If the connection fails it prints the reason and exits, rather than running an API that cannot reach its data.
+
+## Database
+
+### MongoDB Atlas connection string
+
+```
+MONGO_URI=mongodb+srv://<username>:<password>@<cluster-host>/staffsync?retryWrites=true&w=majority
+```
+
+- Use a **database user** from Atlas → *Database Access*, not your Atlas login.
+- Remove the `< >` placeholders entirely.
+- The `@` before the cluster host must stay a literal `@`. Only special characters **inside the password** are URL-encoded (`@` → `%40`, `:` → `%3A`, `/` → `%2F`, `#` → `%23`, `%` → `%25`).
+- Add your IP address in Atlas → *Network Access*.
+
+### Collections
+
+| Model | Collection | Purpose | Indexes |
+|---|---|---|---|
+| `User` | users | Login identity and role (`employee`, `manager`, `hr`) | `email` unique; `{ role, isActive }` |
+| `Employee` | employees | Employment profile, one per user; `employeeId` auto-assigned (`EMP0001`…) | `userId` unique; `employeeId` unique; `managerId`; `department` |
+| `Attendance` | attendances | One record per employee per day (`date` is `YYYY-MM-DD`) | `{ employeeId, date }` **unique** — blocks double check-in; `date` |
+| `Leave` | leaves | Leave requests and their approval state | `{ employeeId, status }`; `{ status, createdAt }` |
+| `Announcement` | announcements | HR announcements with a target audience | `{ targetAudience, createdAt }` |
+| `Training` | trainings | Training programmes; `participants` cannot exceed `capacity` | `startDate`; `participants` |
+| `Notification` | notifications | Per-user notifications | `{ recipient, isRead, createdAt }` |
+| `Counter` | counters | Atomic sequence for `employeeId` (internal) | — |
+
+Rules enforced by the schemas themselves: required fields, enums, maximum lengths, `endDate` not before `startDate`, check-out after check-in, date of birth in the past, whole-number capacity. Passwords use `select: false` and are also stripped from JSON output.
+
+Queries that filter on a field not in the schema throw an error (`strictQuery: 'throw'`) rather than silently matching every document.
+
+### Indexes
+
+Mongoose creates missing indexes automatically when the server starts. To create them explicitly, remove stale ones and print what each collection has:
+
+```bash
+cd server
+npm run db:indexes
+```
+
+You can also see them in Atlas → *Browse Collections* → a collection → *Indexes*.
 
 ## API response format
 
@@ -151,14 +198,14 @@ Reports that the API is alive and the current MongoDB connection state.
   "message": "StaffSync API is running",
   "data": {
     "environment": "development",
-    "database": "disconnected",
+    "database": "connected",
     "uptimeSeconds": 11,
     "timestamp": "2026-10-06T17:35:20.213Z"
   }
 }
 ```
 
-`database` is one of `connected`, `connecting`, `disconnected`, `disconnecting`. It reads `disconnected` until the MongoDB connection is added in Phase 2.
+`database` is one of `connected`, `connecting`, `disconnected`, `disconnecting`.
 
 ## CORS configuration
 
@@ -197,6 +244,10 @@ npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/St
 
 | Symptom | Likely cause |
 |---|---|
+| `querySrv ECONNREFUSED` | DNS lookup for an Atlas `mongodb+srv://` address failed — `config/db.js` already works around the common Windows cause; otherwise check your internet connection or try a different network |
+| `bad auth : Authentication failed` | Wrong database username or password in `MONGO_URI` — reset it in Atlas → Database Access |
+| `mongodb+srv URI cannot have port number` | The `@` before the cluster host was URL-encoded, or a `:port` was added — see *Database* above |
+| Server exits with a timeout / `ServerSelectionError` | Your IP is not on the Atlas Network Access list, or local MongoDB is not running |
 | `Port 5000 is already in use` | Another process (or a second server terminal) is using the port — stop it or change `PORT` |
 | Page says "Unable to reach the server" | Backend not running, or `VITE_API_URL` wrong — restart Vite after editing `client/.env` |
 | `VITE_API_URL is not set` error in the browser | `client/.env` missing |
@@ -204,6 +255,7 @@ npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/St
 
 ## Known limitations (current phase)
 
-- No database connection yet (Phase 2); the health check honestly reports `disconnected`.
+- Models exist but no endpoints write to them yet (Phase 4 onwards).
+- Password hashing arrives with authentication in Phase 4.
 - No authentication yet (Phase 4).
 - The frontend is a single connection-check page; routing and role dashboards arrive in Phases 12–13.

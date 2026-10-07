@@ -24,7 +24,7 @@
                   "const body = pm.response.json();",
                   "pm.test('success is true', () => pm.expect(body.success).to.eql(true));",
                   "pm.test('message is correct', () => pm.expect(body.message).to.eql('StaffSync API is running'));",
-                  "pm.test('database state reported', () => pm.expect(body.data.database).to.be.oneOf(['connected', 'connecting', 'disconnected', 'disconnecting']));"
+                  "pm.test('database connected', () => pm.expect(body.data.database).to.eql('connected'));"
                 ]
               }
             }
