@@ -128,7 +128,7 @@ function AnnouncementsPage() {
       <PageHeader
         title="Announcements"
         subtitle={isHr ? 'Publish news to everyone, employees or managers' : 'News from HR'}
-        actions={isHr && <Button variant="contained" onClick={() => setCreating(true)}>New announcement</Button>}
+        actions={isHr && <Button variant="premium" onClick={() => setCreating(true)}>New announcement</Button>}
       />
       <LoadState loading={loading} error={error} data={data} onRetry={reload}>
         <Stack spacing={2}>

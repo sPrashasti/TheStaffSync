@@ -23,10 +23,18 @@ function LoginPage() {
 
   const submit = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
+    // Read the inputs directly: browser autofill fills them without telling React.
+    const values = Object.fromEntries(new FormData(e.currentTarget));
+    const credentials = { email: values.email.trim(), password: values.password };
+    setForm(credentials);
     setError('');
     setFieldErrors({});
-    const result = await dispatch(login(form));
+    if (!credentials.email || !credentials.password) {
+      setError('Enter your email and password.');
+      return;
+    }
+    setSubmitting(true);
+    const result = await dispatch(login(credentials));
     setSubmitting(false);
     if (login.fulfilled.match(result)) {
       // Back to the page that asked for a login, if it belongs to this role.
@@ -40,11 +48,12 @@ function LoginPage() {
   };
 
   return (
-    <AuthCard title="Log in" subtitle="Welcome back. Sign in to continue.">
+    <AuthCard title="Log in" subtitle="One login for everyone. You will go straight to your HR, manager or employee dashboard.">
       <Stack component="form" spacing={2} onSubmit={submit} noValidate>
         {notice && <Alert severity="info">{notice}</Alert>}
         {error && <Alert severity="error">{error}</Alert>}
         <TextField
+          name="email"
           label="Email"
           type="email"
           autoComplete="email"
@@ -56,6 +65,7 @@ function LoginPage() {
           autoFocus
         />
         <TextField
+          name="password"
           label="Password"
           type="password"
           autoComplete="current-password"
@@ -65,7 +75,7 @@ function LoginPage() {
           helperText={fieldErrors.password}
           required
         />
-        <Button type="submit" variant="contained" size="large" disabled={submitting || !form.email || !form.password}>
+        <Button type="submit" variant="contained" size="large" disabled={submitting}>
           {submitting ? 'Logging in…' : 'Log in'}
         </Button>
         <Typography variant="body2" textAlign="center">

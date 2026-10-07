@@ -86,7 +86,7 @@ function NotificationsPage() {
               {data?.items.map((n) => {
                 const Icon = ICONS[n.type] || NotificationsIcon;
                 return (
-                  <ListItemButton key={n._id} divider onClick={() => open(n)} sx={{ bgcolor: n.isRead ? undefined : 'action.hover' }}>
+                  <ListItemButton key={n._id} divider onClick={() => open(n)} sx={{ bgcolor: n.isRead ? undefined : 'var(--hover-tint)' }}>
                     <ListItemIcon><Icon color={n.isRead ? 'disabled' : 'primary'} /></ListItemIcon>
                     <ListItemText
                       primary={n.title}

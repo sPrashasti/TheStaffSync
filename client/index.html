@@ -1,10 +1,27 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-GB">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>StaffSync</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap"
+    />
+    <script>
+      // Apply the saved light/dark theme before the app loads, so the page never flashes.
+      (function () {
+        var mode = 'light';
+        try {
+          var saved = localStorage.getItem('mui-mode');
+          if (saved === 'dark' || (saved === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) mode = 'dark';
+        } catch (e) { /* storage blocked: use light */ }
+        document.documentElement.classList.add(mode);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

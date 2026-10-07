@@ -12,6 +12,7 @@ import {
   TableRow,
   TextField,
 } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
 import { useSelector } from 'react-redux';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import LoadState from '../../components/LoadState';
@@ -73,7 +74,7 @@ function EmployeesPage({ fixedRole }) {
       <PageHeader
         title={title}
         subtitle={fixedRole === 'manager' ? 'People with the manager role' : 'Everyone in the company'}
-        actions={<Button variant="contained" onClick={() => setCreating(true)}>Add {fixedRole === 'manager' ? 'manager' : 'person'}</Button>}
+        actions={<Button variant="premium" startIcon={<AddIcon />} onClick={() => setCreating(true)}>Add {fixedRole === 'manager' ? 'manager' : 'person'}</Button>}
       />
       <Card variant="outlined">
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ p: 2 }} flexWrap="wrap" useFlexGap>

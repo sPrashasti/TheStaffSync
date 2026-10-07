@@ -1,6 +1,11 @@
 import { Box, Button, Card, CardContent, CardHeader, Divider, List, ListItem, ListItemText, Typography } from '@mui/material';
 import { useSelector } from 'react-redux';
 import { Link as RouterLink } from 'react-router-dom';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import BeachAccessIcon from '@mui/icons-material/BeachAccess';
+import EventBusyIcon from '@mui/icons-material/EventBusy';
+import HowToRegIcon from '@mui/icons-material/HowToReg';
+import ScheduleIcon from '@mui/icons-material/Schedule';
 import StatCard, { StatGrid } from '../../components/StatCard';
 import { useApi } from '../../hooks/useApi';
 import { listAnnouncements } from '../../services/announcementService';
@@ -43,11 +48,11 @@ export function PersonalSummary({ summary }) {
         This month ({formatDay(thisMonth.from)} – {formatDay(thisMonth.to)})
       </Typography>
       <StatGrid>
-        <StatCard label="Days present" value={thisMonth.present} color="success.main" />
-        <StatCard label="Half days" value={thisMonth.halfDay} />
-        <StatCard label="Absent" value={thisMonth.absent} color={thisMonth.absent ? 'error.main' : undefined} hint="Working days up to yesterday" />
-        <StatCard label="On leave" value={thisMonth.onLeave} />
-        <StatCard label="Hours worked" value={formatHours(thisMonth.totalHours)} />
+        <StatCard label="Days present" value={thisMonth.present} icon={HowToRegIcon} accent="sage" />
+        <StatCard label="Half days" value={thisMonth.halfDay} icon={AccessTimeIcon} accent="champagne" />
+        <StatCard label="Absent" value={thisMonth.absent} color={thisMonth.absent ? 'error.main' : undefined} hint="Working days up to yesterday" icon={EventBusyIcon} accent="burgundy" />
+        <StatCard label="On leave" value={thisMonth.onLeave} icon={BeachAccessIcon} accent="champagne" />
+        <StatCard label="Hours worked" value={formatHours(thisMonth.totalHours)} icon={ScheduleIcon} accent="sapphire" />
       </StatGrid>
       <CardRow>
         <ListCard

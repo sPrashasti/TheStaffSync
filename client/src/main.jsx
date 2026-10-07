@@ -11,7 +11,7 @@ import App from './App';
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <Provider store={store}>
-      <ThemeProvider theme={theme}>
+      <ThemeProvider theme={theme} defaultMode="light">
         <CssBaseline />
         <SnackbarProvider>
           <BrowserRouter>

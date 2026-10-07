@@ -23,7 +23,9 @@ import MenuIcon from '@mui/icons-material/Menu';
 import PublicIcon from '@mui/icons-material/Public';
 import { useDispatch, useSelector } from 'react-redux';
 import { NavLink, Outlet } from 'react-router-dom';
+import BrandMark from '../components/BrandMark';
 import NotificationBell from '../components/NotificationBell';
+import ThemeToggle from '../components/ThemeToggle';
 import { logout, selectUser } from '../store/authSlice';
 import { DISPLAY_TIME_ZONES, selectDisplayTimeZone, setDisplayTimeZone } from '../store/preferencesSlice';
 import { NAVIGATION, ROLE_LABELS } from '../routes/navigation';
@@ -43,21 +45,44 @@ function AppLayout() {
 
   const menu = (
     <Box>
-      <Toolbar>
-        <Typography variant="h6" fontWeight={800} color="primary">StaffSync</Typography>
+      <Toolbar sx={{ px: 2.5 }}>
+        <BrandMark />
       </Toolbar>
       <Divider />
-      <List component="nav" aria-label="Main menu">
+      <List component="nav" aria-label="Main menu" sx={{ py: 1.5 }}>
         {items.map(({ path, label, icon: Icon }) => (
           <ListItemButton
             key={path}
             component={NavLink}
             to={`/${user.role}/${path}`}
             onClick={() => setMobileOpen(false)}
-            sx={{ mx: 1, borderRadius: 1, '&.active': { bgcolor: 'action.selected', color: 'primary.main' } }}
+            sx={{
+              mx: 1.5,
+              my: 0.25,
+              borderRadius: '8px',
+              position: 'relative',
+              color: 'var(--text-secondary)',
+              '&:hover': { bgcolor: 'var(--hover-tint)', color: 'var(--text-primary)' },
+              // Active page: sapphire tint with a thin champagne metallic bar on the left.
+              '&.active': {
+                bgcolor: 'var(--nav-active-bg)',
+                color: 'var(--nav-active-text)',
+                fontWeight: 600,
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  left: 0,
+                  top: 8,
+                  bottom: 8,
+                  width: 3,
+                  borderRadius: 3,
+                  background: 'var(--metal)',
+                },
+              },
+            }}
           >
             <ListItemIcon sx={{ minWidth: 40, color: 'inherit' }}><Icon /></ListItemIcon>
-            <ListItemText primary={label} />
+            <ListItemText primary={label} slotProps={{ primary: { fontWeight: 'inherit', fontSize: '0.93rem' } }} />
           </ListItemButton>
         ))}
       </List>
@@ -70,7 +95,14 @@ function AppLayout() {
         position="fixed"
         color="inherit"
         elevation={0}
-        sx={{ borderBottom: 1, borderColor: 'divider', width: { md: `calc(100% - ${DRAWER_WIDTH}px)` }, ml: { md: `${DRAWER_WIDTH}px` } }}
+        sx={{
+          bgcolor: 'var(--appbar-bg)',
+          borderBottom: '1px solid var(--border-subtle)',
+          // Frosted bar on larger screens only; blur is costly on phones.
+          backdropFilter: { md: 'saturate(140%) blur(10px)' },
+          width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
+          ml: { md: `${DRAWER_WIDTH}px` },
+        }}
       >
         <Toolbar sx={{ gap: 1 }}>
           <IconButton edge="start" aria-label="Open menu" onClick={() => setMobileOpen(true)} sx={{ display: { md: 'none' } }}>
@@ -95,10 +127,11 @@ function AppLayout() {
             </Stack>
           </Tooltip>
 
+          <ThemeToggle />
           <NotificationBell />
 
           <IconButton onClick={(e) => setUserMenu(e.currentTarget)} aria-label="Account menu">
-            <Avatar sx={{ width: 34, height: 34, bgcolor: 'primary.main', fontSize: 14 }}>{initials(user.name)}</Avatar>
+            <Avatar sx={{ width: 34, height: 34, background: 'var(--metal)', color: 'var(--on-metal)', fontSize: 14, fontWeight: 700 }}>{initials(user.name)}</Avatar>
           </IconButton>
           <Menu anchorEl={userMenu} open={Boolean(userMenu)} onClose={() => setUserMenu(null)}>
             <Box sx={{ px: 2, py: 1 }}>
@@ -133,7 +166,7 @@ function AppLayout() {
         </Drawer>
       </Box>
 
-      <Box component="main" sx={{ flexGrow: 1, minWidth: 0, p: { xs: 2, sm: 3 } }}>
+      <Box component="main" sx={{ flexGrow: 1, minWidth: 0, p: { xs: 2, sm: 3, lg: 4 }, bgcolor: 'var(--page-bg)' }}>
         <Toolbar />
         <Outlet />
       </Box>

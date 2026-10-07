@@ -58,7 +58,7 @@ function TodayCard({ onChange }) {
                 </Stack>
               </div>
               {!record && (
-                <Button variant="contained" size="large" disabled={busy} onClick={() => act(checkIn, 'Checked in')}>
+                <Button variant="premium" size="large" disabled={busy} onClick={() => act(checkIn, 'Checked in')}>
                   Check in
                 </Button>
               )}

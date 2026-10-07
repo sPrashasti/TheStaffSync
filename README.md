@@ -185,6 +185,15 @@ The React app has one area per role. Every page reads and writes through the rea
 | Notifications | All roles: list, unread filter, mark read, mark all read; the top-bar bell shows the unread count and opens this page |
 | My profile | All roles: view, and edit own phone and address |
 
+**Design system**
+
+- **Colours** live in one file, [client/src/theme/tokens.js](client/src/theme/tokens.js): the light palette (ivory, cream, beige, sage, ice blue, sapphire, champagne) and the dark palette (noir, sapphire, ivory, champagne). Both the Material UI theme and the global CSS variables (`--bg-primary`, `--champagne`, `--card-bg`, …) are generated from it. Components use `var(--…)` or theme palette names and never hard-code colours.
+- **Light and dark themes:** use the sun/moon button in the top bar or on the login page. The choice is remembered on the device and applied before the page draws, so there is no flash.
+- **Champagne metallic** (`variant="premium"` buttons, `var(--metal)`) is an accent only: the logo, the active-menu bar, tab underlines, and at most one main action per page (Check in, Apply for leave, Add person, New training, New announcement).
+- **Status colours are muted:** sage means done or good, champagne means waiting, burgundy means a problem, ice blue means in progress, and grey means neutral.
+- **Fonts:** Playfair Display for headings and big numbers, Inter for everything else (Google Fonts).
+- **Contrast:** every text/background pair in both themes meets WCAG AA (4.5:1 for text, 3:1 for icons and large text). Where a palette colour was too faint for small text on noir, a lighter tint of the same colour is used for text only (`sage-text`, `burgundy-text`).
+
 **Behaviour worth knowing**
 
 - **Session:** the token is kept in `localStorage` so a refresh keeps you signed in. Any 401 from the API (expired token, account deactivated) signs you out and shows the reason on the login page. If the server is unreachable when the app opens, you get a retry screen rather than being logged out.

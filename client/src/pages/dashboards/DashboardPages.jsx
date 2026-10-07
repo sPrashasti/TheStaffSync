@@ -15,7 +15,17 @@ import {
 import { useSelector } from 'react-redux';
 import { Link as RouterLink } from 'react-router-dom';
 import LoadState from '../../components/LoadState';
-import PageHeader from '../../components/PageHeader';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import ApartmentIcon from '@mui/icons-material/Apartment';
+import BeachAccessIcon from '@mui/icons-material/BeachAccess';
+import GroupsIcon from '@mui/icons-material/Groups';
+import HowToRegIcon from '@mui/icons-material/HowToReg';
+import PendingActionsIcon from '@mui/icons-material/PendingActions';
+import PeopleIcon from '@mui/icons-material/People';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import PersonOffIcon from '@mui/icons-material/PersonOff';
+import SchoolIcon from '@mui/icons-material/School';
+import GreetingBanner from '../../components/GreetingBanner';
 import StatCard, { StatGrid } from '../../components/StatCard';
 import StatusChip from '../../components/StatusChip';
 import TableMessage from '../../components/TableMessage';
@@ -28,14 +38,12 @@ import { leaveTypeLabel } from '../../utils/labels';
 import TodayCard from '../attendance/TodayCard';
 import { CardRow, LatestAnnouncements, PersonalSummary } from './DashboardParts';
 
-const firstName = (name = '') => name.split(' ')[0];
-
 export function EmployeeDashboard() {
   const user = useSelector(selectUser);
   const { data, loading, error, reload } = useApi(getEmployeeDashboard);
   return (
     <>
-      <PageHeader title={`Hello, ${firstName(user.name)}`} subtitle="Your day at a glance" />
+      <GreetingBanner name={user.name} subtitle="Here's your day at a glance." />
       <Stack spacing={3}>
         <TodayCard onChange={reload} />
         <LoadState loading={loading} error={error} data={data} onRetry={reload}>
@@ -54,18 +62,18 @@ export function ManagerDashboard() {
 
   return (
     <>
-      <PageHeader title={`Hello, ${firstName(user.name)}`} subtitle="Your team today" />
+      <GreetingBanner name={user.name} subtitle="Here's what's happening with your team today." />
       <Stack spacing={3}>
         <TodayCard onChange={reload} />
         <LoadState loading={loading} error={error} data={data} onRetry={reload}>
           {data && (
             <>
               <StatGrid>
-                <StatCard label="Team size" value={data.team.size} />
-                <StatCard label="Checked in" value={data.team.today.checkedIn} color="success.main" />
-                <StatCard label="On leave" value={data.team.today.onLeave} />
-                <StatCard label="Not checked in" value={data.team.today.notCheckedIn} color={data.team.today.notCheckedIn ? 'warning.main' : undefined} />
-                <StatCard label="Leave to review" value={data.pendingLeave.count} color={data.pendingLeave.count ? 'warning.main' : undefined} />
+                <StatCard label="Team size" value={data.team.size} icon={GroupsIcon} accent="sapphire" />
+                <StatCard label="Checked in" value={data.team.today.checkedIn} icon={HowToRegIcon} accent="sage" />
+                <StatCard label="On leave" value={data.team.today.onLeave} icon={BeachAccessIcon} accent="champagne" />
+                <StatCard label="Not checked in" value={data.team.today.notCheckedIn} icon={AccessTimeIcon} accent="olive" />
+                <StatCard label="Leave to review" value={data.pendingLeave.count} color={data.pendingLeave.count ? 'warning.main' : undefined} icon={PendingActionsIcon} accent="champagne" />
               </StatGrid>
 
               <CardRow>
@@ -124,27 +132,28 @@ export function ManagerDashboard() {
 }
 
 export function HrDashboard() {
+  const user = useSelector(selectUser);
   const { data, loading, error, reload } = useApi(getHrDashboard);
   return (
     <>
-      <PageHeader title="Company overview" subtitle={data ? formatDay(data.date) : ''} />
+      <GreetingBanner name={user.name} subtitle="Here's what's happening across the company today." />
       <Stack spacing={3}>
         <LoadState loading={loading} error={error} data={data} onRetry={reload}>
           {data && (
             <>
               <StatGrid>
-                <StatCard label="Active people" value={data.headcount.active} hint={`${data.headcount.byRole.employee} employees · ${data.headcount.byRole.manager} managers · ${data.headcount.byRole.hr} HR`} />
-                <StatCard label="Departments" value={data.headcount.departments} />
-                <StatCard label="Joined this month" value={data.headcount.joinedThisMonth} />
-                <StatCard label="Deactivated" value={data.headcount.inactive} />
+                <StatCard label="Active people" value={data.headcount.active} hint={`${data.headcount.byRole.employee} employees · ${data.headcount.byRole.manager} managers · ${data.headcount.byRole.hr} HR`} icon={PeopleIcon} accent="sapphire" />
+                <StatCard label="Departments" value={data.headcount.departments} icon={ApartmentIcon} accent="ice" />
+                <StatCard label="Joined this month" value={data.headcount.joinedThisMonth} icon={PersonAddIcon} accent="sage" />
+                <StatCard label="Deactivated" value={data.headcount.inactive} icon={PersonOffIcon} accent="olive" />
               </StatGrid>
-              <Typography variant="subtitle1" fontWeight={700}>Today</Typography>
+              <Typography variant="h6" component="h2" sx={{ mb: 1.5 }}>Today · {formatDay(data.date)}</Typography>
               <StatGrid>
-                <StatCard label="Checked in" value={data.today.checkedIn} color="success.main" />
-                <StatCard label="On leave" value={data.today.onLeave} />
-                <StatCard label="Not checked in" value={data.today.notCheckedIn} color={data.today.notCheckedIn ? 'warning.main' : undefined} />
-                <StatCard label="Leave pending" value={data.leave.pending} hint={`${data.leave.approvedThisMonth} approved this month`} color={data.leave.pending ? 'warning.main' : undefined} />
-                <StatCard label="Trainings" value={data.training.upcoming} hint={`upcoming · ${data.training.ongoing} running now`} />
+                <StatCard label="Checked in" value={data.today.checkedIn} icon={HowToRegIcon} accent="sage" />
+                <StatCard label="On leave" value={data.today.onLeave} icon={BeachAccessIcon} accent="champagne" />
+                <StatCard label="Not checked in" value={data.today.notCheckedIn} icon={AccessTimeIcon} accent="olive" />
+                <StatCard label="Leave pending" value={data.leave.pending} hint={`${data.leave.approvedThisMonth} approved this month`} color={data.leave.pending ? 'warning.main' : undefined} icon={PendingActionsIcon} accent="champagne" />
+                <StatCard label="Trainings" value={data.training.upcoming} hint={`upcoming · ${data.training.ongoing} running now`} icon={SchoolIcon} accent="ice" />
               </StatGrid>
               <Card variant="outlined">
                 <CardHeader title="Recent joiners" slotProps={{ title: { variant: 'subtitle1', fontWeight: 700 } }} action={<Button component={RouterLink} to="/hr/employees">All employees</Button>} />

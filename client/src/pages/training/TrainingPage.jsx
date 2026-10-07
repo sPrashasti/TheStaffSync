@@ -186,7 +186,7 @@ function TrainingPage() {
       <PageHeader
         title="Training"
         subtitle={canEnrol ? 'Find a course and save your seat' : 'Plan and track company training'}
-        actions={canCreate && <Button variant="contained" onClick={() => setCreating(true)}>New training</Button>}
+        actions={canCreate && <Button variant="premium" onClick={() => setCreating(true)}>New training</Button>}
       />
       <Tabs value={tab} onChange={(_, t) => { setTab(t); setPaging({ page: 1, limit: 10 }); }} variant="scrollable" sx={{ mb: 2 }}>
         {tabs.map((t) => <Tab key={t.label} label={t.label} />)}

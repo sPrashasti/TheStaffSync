@@ -8,7 +8,7 @@ import LeaveTable from './LeaveTable';
 function MyLeave({ withHeader = true }) {
   const [applying, setApplying] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const apply = <Button variant="contained" onClick={() => setApplying(true)}>Apply for leave</Button>;
+  const apply = <Button variant="premium" onClick={() => setApplying(true)}>Apply for leave</Button>;
   return (
     <>
       {withHeader ? <PageHeader title="Leave" subtitle="Your requests and their status" actions={apply} /> : <div style={{ marginBottom: 16 }}>{apply}</div>}
