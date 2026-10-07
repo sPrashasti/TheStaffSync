@@ -31,6 +31,8 @@ const announcementSchema = new mongoose.Schema(
 );
 
 announcementSchema.index({ targetAudience: 1, createdAt: -1 });
+// Authors always see their own posts, whatever the audience.
+announcementSchema.index({ createdBy: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Announcement', announcementSchema);
 module.exports.TARGET_AUDIENCES = TARGET_AUDIENCES;

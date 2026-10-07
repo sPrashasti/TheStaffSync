@@ -56,4 +56,10 @@ const listTrainingRules = [
   ),
 ];
 
-module.exports = { createTrainingRules, updateTrainingRules, noBodyRules, listTrainingRules, MAX_CAPACITY };
+// POST /api/trainings/:id/participants
+const assignParticipantRules = exactBody([
+  body('employeeId').exists({ values: 'falsy' }).withMessage('employeeId is required').bail()
+    .isMongoId().withMessage('employeeId must be a valid id'),
+]);
+
+module.exports = { createTrainingRules, updateTrainingRules, noBodyRules, listTrainingRules, assignParticipantRules, MAX_CAPACITY };

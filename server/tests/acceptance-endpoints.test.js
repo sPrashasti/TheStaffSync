@@ -34,14 +34,17 @@ const PLANNED = [
   ['PUT', `/leaves/${ANY_ID}/approve`, 'manager', 'employee'],
   ['PUT', `/leaves/${ANY_ID}/reject`, 'hr', 'employee', { rejectionReason: 'x' }],
   ['GET', '/announcements', 'employee', null],
-  ['POST', '/announcements', 'hr', 'manager', { title: 't', content: 'c' }],
+  ['POST', '/announcements', 'manager', 'employee', { title: 't', content: 'c' }],
   ['PUT', `/announcements/${ANY_ID}`, 'hr', 'employee', { title: 't' }],
-  ['DELETE', `/announcements/${ANY_ID}`, 'hr', 'manager'],
+  ['DELETE', `/announcements/${ANY_ID}`, 'hr', 'employee'],
   ['GET', '/trainings', 'employee', null],
   ['POST', '/trainings', 'manager', 'employee', {}],
   ['PUT', `/trainings/${ANY_ID}`, 'hr', 'employee', { title: 't' }],
   ['DELETE', `/trainings/${ANY_ID}`, 'manager', 'employee'],
   ['POST', `/trainings/${ANY_ID}/enroll`, 'employee', 'hr'],
+  // From the brief's responsibilities: managers assign training to their team.
+  ['POST', `/trainings/${ANY_ID}/participants`, 'hr', 'employee', { employeeId: ANY_ID }],
+  ['DELETE', `/trainings/${ANY_ID}/participants/${ANY_ID}`, 'manager', 'employee'],
   ['GET', '/notifications', 'employee', null],
   ['PUT', `/notifications/${ANY_ID}/read`, 'employee', null],
   ['PUT', '/notifications/read-all', 'employee', null],
@@ -66,7 +69,7 @@ describe('acceptance: every planned endpoint is implemented, mounted and role-ch
   after(async () => { await ctx.teardown(); });
 
   it(`covers all ${PLANNED.length} endpoints from the requirements`, () => {
-    assert.equal(PLANNED.length, 41);
+    assert.equal(PLANNED.length, 43);
   });
 
   for (const [method, path, allowed, denied, body] of PLANNED) {

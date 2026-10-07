@@ -63,8 +63,8 @@ Legend: ✅ pass · 🟡 pass on code and API evidence, browser walkthrough stil
 
 | # | Criterion | Status | Evidence |
 |---|---|---|---|
-| 17 | HR creates, edits and deletes announcements; others read only those for their audience | ✅ | `announcements-training.test.js` "shows each role only the announcements meant for it" |
-| 18 | HR and managers create and manage trainings; employees and managers enrol; capacity is enforced | ✅ | `announcements-training.test.js` (10 people racing for 2 seats → exactly 2) |
+| 17 | HR and managers create announcements (managers edit or delete only their own); everyone reads those for their audience | ✅ | `announcements-training.test.js` "shows each role only the announcements meant for it", "lets managers post announcements and change only their own" |
+| 18 | HR and managers create and manage trainings; employees and managers enrol; HR and managers assign people (managers their own team); capacity is enforced | ✅ | `announcements-training.test.js` (10 people racing for 2 seats → exactly 2; "lets managers assign their own team and HR assign anyone") |
 | 19 | Notifications are stored and created by leave, announcement and training events; list, mark read, mark all read | ✅ | `notifications.test.js`; Postman *08 Notifications* |
 
 ### Dashboards and reports
@@ -81,7 +81,7 @@ Legend: ✅ pass · 🟡 pass on code and API evidence, browser walkthrough stil
 | 22 | One response envelope; one error handler; no stack traces in production | ✅ | `foundation.test.js` envelope and production tests; `acceptance-endpoints.test.js` asserts the envelope on all 41 endpoints |
 | 23 | Malformed ids give 400/404, never a raw 500 | ✅ | `foundation.test.js` "handles ids…"; `auth.test.js` bad id in token |
 | 24 | Lists are paginated with `?page=&limit=` → `{ items, page, total, totalPages }`, limit capped | ✅ | `foundation.test.js` pagination; README *Performance* lists every paginated endpoint |
-| 25 | **Every planned endpoint is implemented and mounted** (integration checkpoint) | ✅ | `acceptance-endpoints.test.js`: 41/41 |
+| 25 | **Every planned endpoint is implemented and mounted** (integration checkpoint) | ✅ | `acceptance-endpoints.test.js`: 43/43 |
 | 26 | Every write endpoint validates input and accepts only listed fields | ✅ | Route audit in Phase 15 (all 21 write routes); `security.test.js` injection and unknown-field tests |
 
 ### Security and configuration
@@ -114,6 +114,8 @@ All of these are documented in the README.
 | Registration creates a user | User **and** employee profile (`Unassigned`) in one transaction | Every feature depends on the profile |
 | `GET /api/employees/:id`: HR or owner | Also the person's **direct manager** | Managers need it when deciding leave |
 | No time zone handling | Company default `TIMEZONE` (IST) plus per-employee zones set by HR | Requested during Phase 8 |
+| Announcements posted by HR only (Phase 0 summary) | HR **and managers**, as the brief's Features 4 and Responsibilities 5 say; managers change only their own posts | Matches the brief |
+| Employees enrol themselves in training | Also: HR and managers **assign** people (`/participants`), as Responsibilities 4 says | Matches the brief |
 | Endpoints in §5 only | Additional: `GET /attendance/today`, `DELETE /trainings/:id/enroll`, `GET /reports/training-summary`, `PUT /auth/password`, `POST /auth/forgot-password`, `POST /auth/reset-password` | Dashboard check-in state; undoing an enrolment; promised training statistics; security hardening; requested feature |
 | Redux for auth only | Auth plus the display time zone preference | A UI preference, not page data |
 | Profile page for employees | For every role | Everyone can update contact details and change password |

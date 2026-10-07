@@ -11,9 +11,6 @@ import {
   DialogContent,
   DialogTitle,
   LinearProgress,
-  List,
-  ListItem,
-  ListItemText,
   Stack,
   Tab,
   Tabs,
@@ -26,6 +23,7 @@ import LoadState from '../../components/LoadState';
 import PageHeader from '../../components/PageHeader';
 import Pager from '../../components/Pager';
 import StatusChip from '../../components/StatusChip';
+import ParticipantsDialog from './ParticipantsDialog';
 import { useApi } from '../../hooks/useApi';
 import { useSnackbar } from '../../hooks/useSnackbar';
 import {
@@ -124,28 +122,8 @@ function TrainingDialog({ open, training, onClose, onSaved }) {
   );
 }
 
-function ParticipantsDialog({ training, onClose }) {
-  return (
-    <Dialog open={Boolean(training)} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>Enrolled ({training?.participants?.length || 0})</DialogTitle>
-      <DialogContent dividers>
-        {training?.participants?.length ? (
-          <List dense>
-            {training.participants.map((p) => (
-              <ListItem key={p._id}>
-                <ListItemText primary={p.userId?.name} secondary={`${p.employeeId} · ${p.department}`} />
-              </ListItem>
-            ))}
-          </List>
-        ) : <Typography color="text.secondary">No one has enrolled yet.</Typography>}
-      </DialogContent>
-      <DialogActions><Button onClick={onClose}>Close</Button></DialogActions>
-    </Dialog>
-  );
-}
-
-// Everyone browses; employees and managers enrol; HR and managers run trainings
-// (managers only their own).
+// Everyone browses; employees and managers enrol; HR and managers run trainings (managers only
+// their own) and assign people (HR anyone, managers their own team).
 function TrainingPage() {
   const toast = useSnackbar();
   const user = useSelector(selectUser);
@@ -162,6 +140,8 @@ function TrainingPage() {
   const [busyId, setBusyId] = useState(null);
 
   const canManage = (t) => user.role === 'hr' || t.createdBy?._id === user._id;
+  // The API includes `participants` for HR, the creator, and (their team only) other managers.
+  const canSeeParticipants = (t) => Array.isArray(t.participants);
 
   const act = async (t, action, message) => {
     setBusyId(t._id);
@@ -223,9 +203,13 @@ function TrainingPage() {
                       {t.seatsLeft === 0 ? 'Full' : 'Enrol'}
                     </Button>
                   ))}
+                  {canSeeParticipants(t) && (
+                    <Button size="small" onClick={() => setViewing(t)}>
+                      {canManage(t) ? 'Participants' : 'My team'}{t.enrolmentOpen ? ' / assign' : ''}
+                    </Button>
+                  )}
                   {canManage(t) && (
                     <>
-                      <Button size="small" onClick={() => setViewing(t)}>Participants</Button>
                       {t.status !== 'completed' && <Button size="small" onClick={() => setEditing(t)}>Edit</Button>}
                       {notStarted && <Button size="small" color="error" onClick={() => setDeleting(t)}>Delete</Button>}
                     </>
@@ -246,7 +230,12 @@ function TrainingPage() {
           onSaved={reload}
         />
       )}
-      <ParticipantsDialog training={viewing} onClose={() => setViewing(null)} />
+      <ParticipantsDialog
+        training={viewing}
+        scope={viewing && canManage(viewing) ? 'all' : 'team'}
+        onClose={() => setViewing(null)}
+        onChange={(updated) => { setViewing(updated); reload(); }}
+      />
       <ConfirmDialog
         open={Boolean(deleting)}
         title="Delete training?"

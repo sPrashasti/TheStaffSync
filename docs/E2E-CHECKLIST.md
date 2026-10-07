@@ -74,6 +74,10 @@ Tick each box as you go. If something does not match, note the step number, the 
 | D6 | Employee 2 (`employee2@…`) | Training | The button says **Full** |
 | D7 | Manager | Edit the training dates | Employee 1 gets a "Training updated" notification |
 | D8 | Any | Notifications → **Mark all as read** | Bell count goes to 0 |
+| D9 | Manager | Announcements → **New announcement** for Employees | Published; Edit/Delete shown on it, but **not** on HR's announcements |
+| D10 | Employee | Announcements | The manager's post is shown, with the manager as author |
+| D11 | Manager | Training → on the training from D4, **Participants / assign** → pick Demo Employee Two → Assign | Listed; Employee Two gets an "Enrolled in training" notification |
+| D12 | Manager | Same dialog → remove icon next to Employee Two | Removed; seat freed |
 
 ## E. Look and feel
 

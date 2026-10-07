@@ -75,6 +75,7 @@ TheStaffSync/
     ├── PHASE-0-REQUIREMENTS.md
     ├── ACCEPTANCE.md           Phase 17 acceptance check: 30 criteria with evidence
     ├── E2E-CHECKLIST.md        Manual browser walkthrough for all roles
+    ├── RBAC.md                 Permission matrix per role, mapped to the brief
     ├── DEPLOYMENT.md           Step-by-step deployment (Render + Atlas)
     └── postman/                Postman collection + environment
 ```
@@ -359,9 +360,9 @@ const getExample = async (req, res) => {
 | GET | `/api/reports/training-summary` | Yes | hr | 200 | 400, 401, 403 |
 | GET | `/api/announcements` | Yes | any (audience-filtered) | 200 | 400, 401 |
 | GET | `/api/announcements/:id` | Yes | any (audience-filtered) | 200 | 400, 401, 404 |
-| POST | `/api/announcements` | Yes | hr | 201 | 400, 401, 403 |
-| PUT | `/api/announcements/:id` | Yes | hr | 200 | 400, 401, 403, 404 |
-| DELETE | `/api/announcements/:id` | Yes | hr | 200 | 400, 401, 403, 404 |
+| POST | `/api/announcements` | Yes | hr, manager | 201 | 400, 401, 403 |
+| PUT | `/api/announcements/:id` | Yes | hr (any), manager (own) | 200 | 400, 401, 403, 404 |
+| DELETE | `/api/announcements/:id` | Yes | hr (any), manager (own) | 200 | 400, 401, 403, 404 |
 | GET | `/api/trainings` | Yes | any | 200 | 400, 401 |
 | GET | `/api/trainings/:id` | Yes | any | 200 | 400, 401, 404 |
 | POST | `/api/trainings` | Yes | hr, manager | 201 | 400, 401, 403 |
@@ -369,6 +370,8 @@ const getExample = async (req, res) => {
 | DELETE | `/api/trainings/:id` | Yes | hr, the manager who created it | 200 | 400, 401, 403, 404, 409 |
 | POST | `/api/trainings/:id/enroll` | Yes | employee, manager | 200 | 400, 401, 403, 404, 409 |
 | DELETE | `/api/trainings/:id/enroll` | Yes | employee, manager | 200 | 400, 401, 403, 404, 409 |
+| POST | `/api/trainings/:id/participants` | Yes | hr (anyone), manager (own team) | 200 | 400, 401, 403, 404, 409 |
+| DELETE | `/api/trainings/:id/participants/:employeeId` | Yes | hr (anyone), manager (own team) | 200 | 400, 401, 403, 404, 409 |
 | GET | `/api/notifications` | Yes | any (own only) | 200 | 400, 401 |
 | PUT | `/api/notifications/:id/read` | Yes | owner | 200 | 400, 401, 404 |
 | PUT | `/api/notifications/read-all` | Yes | owner | 200 | 401 |
@@ -503,6 +506,8 @@ Routes are protected in two layers, both enforced on the server:
 The role always comes from the database, never from the token or the request, so a promotion, demotion or deactivation takes effect on the very next request. "Own" and "team" data are worked out on the server from the logged-in user. The client never sends whose data it wants.
 
 A manager's **team** is every employee whose `managerId` is the manager's own employee record.
+
+The full permission matrix for every feature and role, with the mapping to the project brief, is in [docs/RBAC.md](docs/RBAC.md).
 
 ### GET /api/employees (hr)
 
@@ -739,7 +744,7 @@ Days are clipped to the year: leave from 30 December to 2 January counts 2 days 
 
 ### Announcements
 
-HR publishes; everyone reads the announcements meant for them.
+HR and managers publish; everyone reads the announcements meant for them. HR may edit or delete any post, a manager only their own (**403** `You can only change announcements you posted`).
 
 ```json
 { "title": "Diwali celebration", "content": "Friday 18:00 on the rooftop.", "targetAudience": "all" }
@@ -755,7 +760,10 @@ HR publishes; everyone reads the announcements meant for them.
 |---|---|
 | employee | `all` and `employees` |
 | manager | `all` and `managers` |
-| hr | everything; may filter with `?targetAudience=` |
+| hr | everything |
+| any author | always their own posts, whatever the audience |
+
+Anyone may narrow the list with `?targetAudience=`, within what they can see.
 
 - The list is paginated, newest first, and includes the author (`createdBy: { name, email }`).
 - Opening an announcement outside your audience gives **404** `Announcement not found`, so its existence is not revealed.
@@ -764,7 +772,7 @@ HR publishes; everyone reads the announcements meant for them.
 
 ### Training
 
-HR and managers create trainings; employees and managers enrol.
+HR and managers create trainings; employees and managers enrol themselves; HR and managers can also **assign** people (`POST /api/trainings/:id/participants` with `{ "employeeId": "…" }`) and remove them (`DELETE …/participants/:employeeId`). The person assigned is notified.
 
 ```json
 { "title": "Secure coding", "description": "OWASP Top 10", "trainer": "Security team", "startDate": "2026-11-02", "endDate": "2026-11-03", "capacity": 20 }
@@ -777,7 +785,7 @@ HR and managers create trainings; employees and managers enrol.
 | `startDate`, `endDate` | `YYYY-MM-DD`, end not before start, start not in the past |
 | `capacity` | Whole number 1–1000 |
 
-Every training response adds `status` (`upcoming`, `ongoing`, `completed`), `enrolledCount`, `seatsLeft`, `isEnrolled` (for the caller) and `enrolmentOpen` (true until the end of the start day). The **participant list** is only included for HR and the manager who created the training.
+Every training response adds `status` (`upcoming`, `ongoing`, `completed`), `enrolledCount`, `seatsLeft`, `isEnrolled` (for the caller) and `enrolmentOpen` (true until the end of the start day). The **participant list** is included in full for HR and the manager who created the training; another manager sees only their own team on it; employees do not see it.
 
 | Rule | Response |
 |---|---|
@@ -787,7 +795,8 @@ Every training response adds `status` (`upcoming`, `ongoing`, `completed`), `enr
 | Enrol once per training | 409 `You are already enrolled in this training` |
 | No seats left | 409 `This training is full` |
 | Enrolment and withdrawal close once the training starts (the start day itself is still open) | 409 `Enrolment has closed because this training has started` |
-| HR cannot enrol | 403 |
+| HR cannot enrol themselves | 403 |
+| A manager may assign or remove only their direct reports; HR anyone. Deactivated people cannot be assigned | 403 `That employee is not in your team` / 400 |
 
 Enrolment is a single atomic update that checks seats, duplicates and dates together. Ten people racing for two seats get exactly two places.
 
@@ -906,7 +915,7 @@ Symptom of a CORS misconfiguration: the request works in Postman but the browser
 
 There are three layers of tests, from fastest to most realistic.
 
-**1. API test suite** (`server`, 133 tests, about 30 seconds)
+**1. API test suite** (`server`, 137 tests, about 30 seconds)
 
 ```bash
 cd server
@@ -930,7 +939,7 @@ npm test
 | `password-reset.test.js` | Same reply for unknown emails, emailed single-use link, hashed token, expiry, newer link cancels older, sessions revoked, deactivated accounts, limits, production without email |
 | `security.test.js` | Headers, CORS, repeated parameters, operator injection, ignored privilege fields, sign-up and failed-login limits, password change revoking old tokens, production config, no password hashes in responses |
 | `client-app.test.js` | Production page serving: strict page CSP, deep links, asset caching, API kept as JSON |
-| `acceptance-endpoints.test.js` | Every endpoint planned in the requirements (41) is mounted, open to the roles allowed and refused to a role that is not |
+| `acceptance-endpoints.test.js` | Every endpoint planned in the requirements and the brief (43) is mounted, open to the roles allowed and refused to a role that is not |
 | `leave-workflow.e2e.test.js` | **End to end:** HR creates a manager → employee registers → HR places them in the team → employee applies → manager notified and approves → employee notified → HR sees the same record and totals → rejection path → deactivation keeps history |
 
 **2. Client tests** (`client`, a few seconds)
@@ -953,7 +962,7 @@ The Postman collection below remains the quickest way to exercise a running serv
 3. Click the environment's eye icon and fill in **hrPassword** and **managerPassword**. These are `SEED_HR_PASSWORD` and `SEED_DEMO_PASSWORD` from `server/.env`. Run `npm run seed:demo` first if you haven't. The passwords stay in your local Postman only; the committed environment file leaves them blank.
 4. Open the collection, choose **Run collection**, and run it with the backend started.
 
-Every request carries automated assertions. Expected result: **169 requests, 417 assertions, 0 failures**.
+Every request carries automated assertions. Expected result: **178 requests, 434 assertions, 0 failures**.
 
 **00 Health**
 
@@ -1079,7 +1088,8 @@ It only touches `postman+…@staffsync.test` accounts and refuses to run when `N
 
 | Request | Expected |
 |---|---|
-| HR publishes for managers; invalid announcement; manager publishes | 201 / 400 / 403 |
+| HR publishes for managers; invalid announcement; employee publishes | 201 / 400 / 403 |
+| Manager publishes; tries to edit HR's post; deletes own | 201 / 404 / 200 |
 | Manager sees it; employee does not; employee opens it | listed / not listed / 404 |
 | HR widens audience to all; employee opens it | 200 / 200 |
 | Manager deletes / HR deletes | 403 / 200 |
@@ -1087,6 +1097,7 @@ It only touches `postman+…@staffsync.test` accounts and refuses to run when `N
 | Employee enrols; enrols again; second employee takes last seat; third finds it full | 200 / 409 / 200 / 409 |
 | Capacity below enrolment | 409 |
 | Creator sees participants; employee withdraws; employee lists own trainings | 200 with names / seat freed / listed |
+| Manager assigns a team member; someone outside the team; employee assigns; manager removes | 200 / 403 / 403 / 200 |
 | HR enrols | 403 |
 | Training summary report shows 1 of 2 seats (50%); manager opens report | 200 / 403 |
 | Creator deletes; training then returns | 200 / 404 |

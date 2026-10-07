@@ -7,6 +7,8 @@ const {
   deleteTraining,
   enroll,
   withdraw,
+  assignParticipant,
+  unassignParticipant,
 } = require('../controllers/trainingController');
 const { protect, authorize, loadEmployee } = require('../middleware/authMiddleware');
 const { validate, validateObjectId } = require('../middleware/validate');
@@ -15,6 +17,7 @@ const {
   updateTrainingRules,
   noBodyRules,
   listTrainingRules,
+  assignParticipantRules,
 } = require('../validators/trainingValidators');
 
 const router = express.Router();
@@ -30,5 +33,9 @@ router.delete('/:id', authorize('hr', 'manager'), validateObjectId(), deleteTrai
 
 router.post('/:id/enroll', authorize('employee', 'manager'), validateObjectId(), noBodyRules, validate, enroll);
 router.delete('/:id/enroll', authorize('employee', 'manager'), validateObjectId(), withdraw);
+
+// HR assigns anyone; a manager assigns only their direct reports (checked in the controller).
+router.post('/:id/participants', authorize('hr', 'manager'), validateObjectId(), assignParticipantRules, validate, assignParticipant);
+router.delete('/:id/participants/:employeeId', authorize('hr', 'manager'), validateObjectId(), validateObjectId('employeeId'), unassignParticipant);
 
 module.exports = router;

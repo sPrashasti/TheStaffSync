@@ -1,3 +1,4 @@
+const Employee = require('../models/Employee');
 const Training = require('../models/Training');
 const AppError = require('../utils/AppError');
 const { sendSuccess, sendCreated } = require('../utils/apiResponse');
@@ -13,7 +14,8 @@ const NOTIFY_FIELDS = ['title', 'trainer', 'startDate', 'endDate'];
 const withCreator = { path: 'createdBy', select: 'name email role' };
 const withParticipants = {
   path: 'participants',
-  select: 'employeeId department designation userId',
+  // managerId lets the app decide whom a manager may remove.
+  select: 'employeeId department designation managerId userId',
   populate: { path: 'userId', select: 'name email' },
 };
 
@@ -30,12 +32,21 @@ const statusOf = (training, today) => {
 const canManage = (req, training) =>
   req.user.role === 'hr' || (req.user.role === 'manager' && training.createdBy && (training.createdBy._id || training.createdBy).equals(req.user._id));
 
-// What a caller sees: seat counts, their own enrolment and the status for everyone; the
-// participant list only for people who can manage the training.
-const present = (req, training, today = companyToday()) => {
+// A manager's direct reports (ids), or null for other roles. Decides whom they may assign and
+// which participants they may see on trainings they did not create.
+const teamIdsFor = async (req) =>
+  (req.user.role === 'manager' ? Employee.find({ managerId: req.employee._id }).distinct('_id') : null);
+
+// What a caller sees: seat counts, their own enrolment and the status for everyone. The
+// participant list goes to HR and the creator in full, to other managers only for their own
+// team, and to employees not at all.
+const present = (req, training, today = companyToday(), teamIds = null) => {
   const ids = training.participants.map((p) => p._id || p);
   const data = training.toJSON();
-  if (!canManage(req, training)) delete data.participants;
+  if (!canManage(req, training)) {
+    if (teamIds) data.participants = data.participants.filter((p) => teamIds.some((id) => id.equals(p._id || p)));
+    else delete data.participants;
+  }
   return {
     ...data,
     status: statusOf(training, today),
@@ -70,7 +81,7 @@ const listTrainings = async (req, res) => {
   if (req.query.enrolled === 'true') filter.participants = req.employee._id;
 
   const pagination = getPagination(req.query);
-  const [items, total] = await Promise.all([
+  const [items, total, teamIds] = await Promise.all([
     Training.find(filter)
       .sort({ startDate: 1 })
       .skip(pagination.skip)
@@ -78,10 +89,11 @@ const listTrainings = async (req, res) => {
       .populate(withCreator)
       .populate(withParticipants),
     Training.countDocuments(filter),
+    teamIdsFor(req),
   ]);
   sendSuccess(res, {
     message: 'Trainings',
-    data: buildPage(items.map((t) => present(req, t, today)), total, pagination),
+    data: buildPage(items.map((t) => present(req, t, today, teamIds)), total, pagination),
   });
 };
 
@@ -89,7 +101,7 @@ const listTrainings = async (req, res) => {
 const getTraining = async (req, res) => {
   const training = await loadTraining(req.params.id);
   await training.populate([withCreator, withParticipants]);
-  sendSuccess(res, { message: 'Training', data: present(req, training) });
+  sendSuccess(res, { message: 'Training', data: present(req, training, companyToday(), await teamIdsFor(req)) });
 };
 
 // POST /api/trainings — hr, manager.
@@ -163,50 +175,87 @@ const deleteTraining = async (req, res) => {
   sendSuccess(res, { message: 'Training deleted', data: { _id: training._id } });
 };
 
-// Explains why a conditional enrol/withdraw update matched nothing.
-const enrolmentConflict = async (id, employeeId, enrolling) => {
+// Explains why a conditional enrol/withdraw update matched nothing. `who` names the person:
+// "You" for self-service, their name when someone else assigned them.
+const enrolmentConflict = async (id, employeeId, enrolling, who = 'You') => {
   const training = await loadTraining(id);
   const enrolled = training.participants.some((p) => p.equals(employeeId));
-  if (enrolling && enrolled) return new AppError('You are already enrolled in this training', 409);
-  if (!enrolling && !enrolled) return new AppError('You are not enrolled in this training', 409);
+  const verb = who === 'You' ? 'are' : 'is';
+  if (enrolling && enrolled) return new AppError(`${who} ${verb} already enrolled in this training`, 409);
+  if (!enrolling && !enrolled) return new AppError(`${who} ${verb} not enrolled in this training`, 409);
   if (dateToDateString(training.startDate) < companyToday()) {
     return new AppError('Enrolment has closed because this training has started', 409);
   }
   return new AppError('This training is full', 409);
 };
 
-// POST /api/trainings/:id/enroll — employee, manager. One atomic update checks every rule, so
-// simultaneous requests can never overfill a training or enrol someone twice.
-const enroll = async (req, res) => {
-  const employeeId = req.employee._id;
-  const updated = await Training.findOneAndUpdate(
-    {
-      _id: req.params.id,
-      startDate: { $gte: dateStringToDate(companyToday()) },
-      participants: { $ne: employeeId },
-      $expr: { $lt: [{ $size: '$participants' }, '$capacity'] },
-    },
-    { $push: { participants: employeeId } },
-    { returnDocument: 'after' }
-  );
-  if (!updated) throw await enrolmentConflict(req.params.id, employeeId, true);
+// Adds one person to a training in a single atomic update, so simultaneous requests can never
+// overfill it or enrol someone twice. Returns the updated training, or null if a rule failed.
+const addParticipant = (trainingId, employeeId) => Training.findOneAndUpdate(
+  {
+    _id: trainingId,
+    startDate: { $gte: dateStringToDate(companyToday()) },
+    participants: { $ne: employeeId },
+    $expr: { $lt: [{ $size: '$participants' }, '$capacity'] },
+  },
+  { $push: { participants: employeeId } },
+  { returnDocument: 'after' }
+);
 
-  await updated.populate([withCreator, withParticipants]);
-  sendSuccess(res, { message: 'Enrolled', data: present(req, updated) });
+// Removes one person, only before the training starts.
+const removeParticipant = (trainingId, employeeId) => Training.findOneAndUpdate(
+  { _id: trainingId, startDate: { $gte: dateStringToDate(companyToday()) }, participants: employeeId },
+  { $pull: { participants: employeeId } },
+  { returnDocument: 'after' }
+);
+
+const respondWith = async (req, res, message, training) => {
+  await training.populate([withCreator, withParticipants]);
+  sendSuccess(res, { message, data: present(req, training, companyToday(), await teamIdsFor(req)) });
+};
+
+// POST /api/trainings/:id/enroll — employee, manager. Enrol yourself.
+const enroll = async (req, res) => {
+  const updated = await addParticipant(req.params.id, req.employee._id);
+  if (!updated) throw await enrolmentConflict(req.params.id, req.employee._id, true);
+  return respondWith(req, res, 'Enrolled', updated);
 };
 
 // DELETE /api/trainings/:id/enroll — employee, manager. Withdraw before the training starts.
 const withdraw = async (req, res) => {
-  const employeeId = req.employee._id;
-  const updated = await Training.findOneAndUpdate(
-    { _id: req.params.id, startDate: { $gte: dateStringToDate(companyToday()) }, participants: employeeId },
-    { $pull: { participants: employeeId } },
-    { returnDocument: 'after' }
-  );
-  if (!updated) throw await enrolmentConflict(req.params.id, employeeId, false);
+  const updated = await removeParticipant(req.params.id, req.employee._id);
+  if (!updated) throw await enrolmentConflict(req.params.id, req.employee._id, false);
+  return respondWith(req, res, 'Withdrawn', updated);
+};
 
-  await updated.populate([withCreator, withParticipants]);
-  sendSuccess(res, { message: 'Withdrawn', data: present(req, updated) });
+// The employee an HR user or manager wants to assign. HR may pick any active employee; a manager
+// only their direct reports. Returns the Employee with its user populated.
+const loadAssignable = async (req, employeeId) => {
+  const employee = await Employee.findById(employeeId).populate('userId', 'name isActive');
+  if (!employee || !employee.userId) throw new AppError('Employee not found', 404);
+  if (req.user.role === 'manager' && !(employee.managerId && employee.managerId.equals(req.employee._id))) {
+    throw new AppError('That employee is not in your team', 403);
+  }
+  if (!employee.userId.isActive) throw new AppError('This employee is deactivated', 400);
+  return employee;
+};
+
+// POST /api/trainings/:id/participants { employeeId } — hr, manager. Assign someone to a training.
+const assignParticipant = async (req, res) => {
+  const employee = await loadAssignable(req, req.body.employeeId);
+  const updated = await addParticipant(req.params.id, employee._id);
+  if (!updated) throw await enrolmentConflict(req.params.id, employee._id, true, employee.userId.name);
+  await notifications.trainingAssigned({ training: updated, employee, byName: req.user.name });
+  return respondWith(req, res, `${employee.userId.name} enrolled`, updated);
+};
+
+// DELETE /api/trainings/:id/participants/:employeeId — hr, manager. Remove someone before it starts.
+const unassignParticipant = async (req, res) => {
+  const employee = await loadAssignable(req, req.params.employeeId);
+  const updated = await removeParticipant(req.params.id, employee._id);
+  if (!updated) throw await enrolmentConflict(req.params.id, employee._id, false, employee.userId.name);
+  await notifications.trainingUnassigned({ training: updated, employee, byName: req.user.name });
+  return respondWith(req, res, `${employee.userId.name} removed`, updated);
 };
 
 module.exports = {
@@ -217,5 +266,7 @@ module.exports = {
   deleteTraining,
   enroll,
   withdraw,
+  assignParticipant,
+  unassignParticipant,
   statusOf,
 };

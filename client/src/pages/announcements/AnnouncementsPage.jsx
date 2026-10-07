@@ -96,12 +96,15 @@ function AnnouncementDialog({ open, announcement, onClose, onSaved }) {
   );
 }
 
-// Everyone reads the announcements meant for them; HR also writes, edits and deletes.
+// Everyone reads the announcements meant for them. HR and managers post; HR may edit or delete
+// any post, a manager only their own.
 function AnnouncementsPage() {
   const toast = useSnackbar();
   const user = useSelector(selectUser);
   const displayTimeZone = useSelector(selectDisplayTimeZone);
   const isHr = user.role === 'hr';
+  const canPost = user.role !== 'employee';
+  const canEdit = (a) => isHr || a.createdBy?._id === user._id;
   const [paging, setPaging] = useState({ page: 1, limit: 10 });
   const { data, loading, error, reload } = useApi(() => listAnnouncements(paging), [paging]);
   const [editing, setEditing] = useState(null);
@@ -127,8 +130,8 @@ function AnnouncementsPage() {
     <>
       <PageHeader
         title="Announcements"
-        subtitle={isHr ? 'Publish news to everyone, employees or managers' : 'News from HR'}
-        actions={isHr && <Button variant="premium" onClick={() => setCreating(true)}>New announcement</Button>}
+        subtitle={canPost ? 'Publish news to everyone, employees or managers' : 'News from HR and your managers'}
+        actions={canPost && <Button variant="premium" onClick={() => setCreating(true)}>New announcement</Button>}
       />
       <LoadState loading={loading} error={error} data={data} onRetry={reload}>
         <Stack spacing={2}>
@@ -138,7 +141,7 @@ function AnnouncementsPage() {
               <CardContent>
                 <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
                   <Typography variant="h6" fontWeight={700}>{a.title}</Typography>
-                  {isHr && <Chip size="small" label={audienceLabel(a.targetAudience)} />}
+                  {canPost && <Chip size="small" label={audienceLabel(a.targetAudience)} />}
                 </Stack>
                 <Typography variant="caption" color="text.secondary">
                   {a.createdBy?.name || 'HR'} · {formatDateTime(a.createdAt, displayTimeZone)}
@@ -146,7 +149,7 @@ function AnnouncementsPage() {
                 </Typography>
                 <Typography sx={{ mt: 1.5, whiteSpace: 'pre-wrap' }}>{a.content}</Typography>
               </CardContent>
-              {isHr && (
+              {canEdit(a) && (
                 <CardActions>
                   <Button size="small" onClick={() => setEditing(a)}>Edit</Button>
                   <Button size="small" color="error" onClick={() => setDeleting(a)}>Delete</Button>
@@ -158,7 +161,7 @@ function AnnouncementsPage() {
         </Stack>
       </LoadState>
 
-      {isHr && (
+      {canPost && (
         <>
           <AnnouncementDialog
             open={creating || Boolean(editing)}

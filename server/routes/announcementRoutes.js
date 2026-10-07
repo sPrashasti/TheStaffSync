@@ -18,11 +18,12 @@ const router = express.Router();
 
 router.use(protect);
 
-// Everyone reads (filtered by audience); only HR writes.
+// Everyone reads (filtered by audience); HR and managers write. A manager may only edit or
+// delete their own posts, which the controller checks.
 router.get('/', listAnnouncementRules, validate, listAnnouncements);
 router.get('/:id', validateObjectId(), getAnnouncement);
-router.post('/', authorize('hr'), createAnnouncementRules, validate, createAnnouncement);
-router.put('/:id', authorize('hr'), validateObjectId(), updateAnnouncementRules, validate, updateAnnouncement);
-router.delete('/:id', authorize('hr'), validateObjectId(), deleteAnnouncement);
+router.post('/', authorize('hr', 'manager'), createAnnouncementRules, validate, createAnnouncement);
+router.put('/:id', authorize('hr', 'manager'), validateObjectId(), updateAnnouncementRules, validate, updateAnnouncement);
+router.delete('/:id', authorize('hr', 'manager'), validateObjectId(), deleteAnnouncement);
 
 module.exports = router;

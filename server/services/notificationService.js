@@ -101,6 +101,24 @@ const trainingChanged = async (training) =>
     entityId: training._id,
   });
 
+const trainingAssigned = ({ training, employee, byName }) =>
+  notify([employee.userId._id || employee.userId], {
+    type: 'training',
+    title: 'Enrolled in training',
+    message: `${byName} enrolled you in "${training.title}" (${formatRange(training.startDate, training.endDate)}).`,
+    entityType: 'Training',
+    entityId: training._id,
+  });
+
+const trainingUnassigned = ({ training, employee, byName }) =>
+  notify([employee.userId._id || employee.userId], {
+    type: 'training',
+    title: 'Removed from training',
+    message: `${byName} removed you from "${training.title}" (${formatRange(training.startDate, training.endDate)}).`,
+    entityType: 'Training',
+    entityId: training._id,
+  });
+
 const trainingCancelled = async (training) => {
   const recipients = await participantUserIds(training);
   await removeFor('Training', training._id);
@@ -119,5 +137,7 @@ module.exports = {
   announcementPublished,
   removeFor,
   trainingChanged,
+  trainingAssigned,
+  trainingUnassigned,
   trainingCancelled,
 };

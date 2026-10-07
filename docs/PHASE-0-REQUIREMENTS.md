@@ -14,8 +14,8 @@
 | 3 | Employee Management | HR creates/updates/deactivates employees and managers; employees view/update own profile |
 | 4 | Attendance | Check-in, check-out, own history, team view (manager), company view (HR), server-side duplicate prevention |
 | 5 | Leave Management | Apply, view own, view team (manager), view all (HR), approve/reject with state rules, rejection reason |
-| 6 | Announcements | HR full CRUD; employees/managers read, filtered by target audience |
-| 7 | Training | HR/manager create and manage programmes; employees view and enrol; capacity enforced |
+| 6 | Announcements | HR and managers post (managers edit/delete only their own); everyone reads, filtered by target audience |
+| 7 | Training | HR/manager create and manage programmes; employees view and enrol; HR/managers assign people (managers their own team); capacity enforced |
 | 8 | Notifications | Stored in MongoDB; created by leave/announcement/training events; list, mark read, mark all read |
 | 9 | Dashboards | Role-specific dashboards whose statistics come from backend aggregation endpoints |
 | 10 | Reports & Analytics | HR: headcount, department breakdown, attendance summary, leave statistics, training statistics |
@@ -39,10 +39,12 @@ Legend: ✅ allowed · 🔒 own/team-scoped only · ❌ forbidden (enforced serv
 | View own leaves | ✅ | ✅ | ✅ |
 | View team leaves | ❌ | 🔒 own team only | ✅ all |
 | Approve / reject leave | ❌ | 🔒 own team only | ✅ any |
-| Create / edit / delete announcements | ❌ | ❌ | ✅ |
+| Create announcements | ❌ | ✅ | ✅ |
+| Edit / delete announcements | ❌ | 🔒 own posts | ✅ |
 | View announcements | ✅ (audience-filtered) | ✅ (audience-filtered) | ✅ |
 | Create / edit / delete training | ❌ | ✅ | ✅ |
 | Enrol in training | ✅ | ✅ | ❌ |
+| Assign people to training | ❌ | 🔒 own team | ✅ |
 | View own notifications / mark read | ✅ | ✅ | ✅ |
 | Dashboard stats endpoint | 🔒 own | 🔒 team | ✅ company-wide |
 | Reports & analytics | ❌ | ❌ | ✅ |
@@ -126,7 +128,7 @@ User 1───1 Employee ──┬──* Attendance
 | Method | URL | Role |
 |---|---|---|
 | GET | `/api/announcements` | any (audience-filtered) |
-| POST / PUT `/:id` / DELETE `/:id` | `/api/announcements` | hr |
+| POST / PUT `/:id` / DELETE `/:id` | `/api/announcements` | hr, manager (own posts) |
 
 **Training**
 | Method | URL | Role |
@@ -134,6 +136,7 @@ User 1───1 Employee ──┬──* Attendance
 | GET | `/api/trainings` | any |
 | POST / PUT `/:id` / DELETE `/:id` | `/api/trainings` | hr, manager |
 | POST | `/api/trainings/:id/enroll` | employee, manager (capacity-checked) |
+| POST / DELETE `/:employeeId` | `/api/trainings/:id/participants` | hr (anyone), manager (own team) |
 
 **Notifications**
 | Method | URL | Role |
