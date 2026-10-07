@@ -17,8 +17,9 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | 6 | Employee management (create, update, deactivate) | ✅ Complete |
 | 7 | Attendance (check-in, check-out, history) | ✅ Complete |
 | 8 | Leave management (apply, approve, reject) | ✅ Complete |
-| 9 | HR dashboards and reports | ⏳ Next |
-| 10–11 | Backend modules (announcements, training, notifications) | Planned |
+| 9 | Role dashboards and HR reports | ✅ Complete |
+| 10 | Announcements and training | ⏳ Next |
+| 11 | Notifications | Planned |
 | 12–13 | Frontend integration + dashboards | Planned |
 | 14–18 | Testing, security hardening, optimisation, deployment | Planned |
 
@@ -44,6 +45,7 @@ TheStaffSync/
 │   ├── routes/                 Express routers — each one mounted in app.js
 │   ├── scripts/                Maintenance scripts (index sync, test-data clean-up)
 │   ├── seed/seed.js            Creates the first HR account (and optional demo data)
+│   ├── services/               Shared statistics used by dashboards and reports
 │   ├── utils/                  AppError, response helpers, pagination, JWT, password policy
 │   ├── validators/             express-validator rules per module
 │   ├── app.js                  Builds the Express app (middleware + routes)
@@ -101,6 +103,7 @@ npm run seed:demo     # optional: also a demo manager with a team, for testing
 | `JWT_SECRET` | Secret for signing tokens — at least 32 characters; the server refuses to start without it | generate with the command below |
 | `JWT_EXPIRES_IN` | Token lifetime | `1d` |
 | `CLIENT_URL` | Frontend origin(s) allowed by CORS, comma-separated | `http://localhost:5173` |
+| `WORKING_DAYS` | Working days used to count absences in reports, comma-separated from `Sun Mon Tue Wed Thu Fri Sat`; the server will not start with an invalid list | `Mon,Tue,Wed,Thu,Fri` (default); `Mon,Tue,Wed,Thu,Fri,Sat` for a six-day week |
 | `TIMEZONE` | Company **default** time zone (IANA name) for attendance and leave dates. HR can give individual employees their own (see *Time zones*). The server will not start with an invalid one | `Asia/Kolkata` (IST, the default if unset) |
 | `SEED_HR_NAME` | Name of the first HR account (seed script only) | `StaffSync HR` |
 | `SEED_HR_EMAIL` | Email of the first HR account | `hr@example.com` |
@@ -135,7 +138,8 @@ npm run dev
 # → StaffSync API listening on http://localhost:5000 (development)
 # → CORS allowed origins: http://localhost:5173
 # → Default time zone: Asia/Kolkata
-# → Mounted routes: /api/health, /api/auth, /api/employees, /api/attendance, /api/leaves
+# → Working days: Mon, Tue, Wed, Thu, Fri
+# → Mounted routes: /api/health, /api/auth, /api/employees, /api/attendance, /api/leaves, /api/dashboard, /api/reports
 
 # Terminal 2 — frontend
 cd client
@@ -274,6 +278,12 @@ const getExample = async (req, res) => {
 | GET | `/api/leaves/:id` | Yes | applicant, their manager, hr | 200 | 400, 401, 403, 404 |
 | PUT | `/api/leaves/:id/approve` | Yes | applicant's manager, hr | 200 | 400, 401, 403, 404, 409 |
 | PUT | `/api/leaves/:id/reject` | Yes | applicant's manager, hr | 200 | 400, 401, 403, 404, 409 |
+| GET | `/api/dashboard/employee` | Yes | employee | 200 | 400, 401, 403 |
+| GET | `/api/dashboard/manager` | Yes | manager | 200 | 400, 401, 403 |
+| GET | `/api/dashboard/hr` | Yes | hr | 200 | 400, 401, 403 |
+| GET | `/api/reports/department-stats` | Yes | hr | 200 | 400, 401, 403 |
+| GET | `/api/reports/attendance-summary` | Yes | hr | 200 | 400, 401, 403 |
+| GET | `/api/reports/leave-summary` | Yes | hr | 200 | 400, 401, 403 |
 
 More endpoints are added and documented phase by phase; the full planned list is in [docs/PHASE-0-REQUIREMENTS.md](docs/PHASE-0-REQUIREMENTS.md#5-api-endpoint-list).
 
@@ -541,6 +551,67 @@ Overlap checking runs inside a transaction, so two overlapping requests sent at 
 
 `GET /api/leaves/:id` is allowed for the applicant, their direct manager and HR.
 
+### Dashboards
+
+Each role has one dashboard endpoint. Every number is calculated from MongoDB on each request; nothing is hard-coded or cached. Dashboards take no query parameters.
+
+**`GET /api/dashboard/employee`** (employee)
+
+| Field | Contents |
+|---|---|
+| `date`, `timeZone` | Today in the employee's time zone |
+| `today` | `status` (`not-checked-in`, `checked-in`, `checked-out`, `on-leave`), today's attendance `record`, and approved `leave` covering today |
+| `thisMonth` | `from` (1st) – `to` (today): `present`, `halfDay`, `absent`, `onLeave`, `totalHours` |
+| `leave` | `pending` count, `approvedDaysThisYear`, `upcoming` (next 5 approved requests) |
+
+**`GET /api/dashboard/manager`** (manager)
+
+| Field | Contents |
+|---|---|
+| `me` | The manager's own summary, same shape as the employee dashboard |
+| `team` | `size` (active direct reports), `today: { checkedIn, onLeave, notCheckedIn }`, and `members` with each person's status and check-in/out times for their own today |
+| `pendingLeave` | `count` and the `oldest` 5 pending requests (longest-waiting first) |
+
+**`GET /api/dashboard/hr`** (hr)
+
+| Field | Contents |
+|---|---|
+| `headcount` | `active`, `inactive`, `byRole: { employee, manager, hr }`, number of `departments`, `joinedThisMonth` |
+| `today` | Company-wide `checkedIn`, `onLeave`, `notCheckedIn`, each judged by that employee's own today |
+| `leave` | `pending` requests, `approvedThisMonth` |
+| `recentJoiners` | 5 most recent active joiners |
+
+### Reports (hr)
+
+**`GET /api/reports/department-stats`**: per department, `total`, `active`, `inactive`, and active `employees`, `managers`, `hr`, plus company `totals`. A single aggregation.
+
+**`GET /api/reports/attendance-summary`**: optional `?from=&to=` (default: 1st of this month to today, at most 366 days), `?department=`, and `page`/`limit` for `byEmployee`. Covers **active** employees.
+
+| Field | Contents |
+|---|---|
+| `from`, `to`, `workingDays` | The period and the working week used |
+| `totals`, `byDepartment[]` | `employees`, `present`, `halfDay`, `absent`, `onLeave`, `totalHours`, `avgHoursPerDay` |
+| `byEmployee` | Paginated rows with the same counts per person, sorted by department and name |
+
+How the counts work:
+
+- `present` / `halfDay` / `totalHours` come from attendance records. Working on a non-working day still counts.
+- `onLeave`: working days with **approved** leave and no check-in.
+- `absent`: working days with neither a check-in nor approved leave. Pending leave does not excuse a day. Counting starts at the employee's `joiningDate` and stops at **yesterday** in their time zone, so today never counts as absent.
+- The working week is `WORKING_DAYS`. Public holidays are not known yet, so they count as absences.
+
+**`GET /api/reports/leave-summary`**: optional `?year=` (default this year) and `?department=`.
+
+| Field | Contents |
+|---|---|
+| `totals` | `requests`, `approvedDays` |
+| `byStatus` | `pending`, `approved`, `rejected`, each with `requests` and `days` |
+| `byType[]` | Every leave type with `requests` and `approvedDays` |
+| `byDepartment[]` | `requests`, `pending`, `approvedDays` |
+| `byMonth[]` | All 12 months with approved `requests` and `approvedDays`, by the month the leave starts |
+
+Days are clipped to the year: leave from 30 December to 2 January counts 2 days in each year.
+
 ## CORS configuration
 
 The API only accepts browser requests from origins listed in `CLIENT_URL`.
@@ -560,7 +631,7 @@ Symptom of a CORS misconfiguration: the request works in Postman but the browser
 3. Click the environment's eye icon and fill in **hrPassword** and **managerPassword**. These are `SEED_HR_PASSWORD` and `SEED_DEMO_PASSWORD` from `server/.env`. Run `npm run seed:demo` first if you haven't. The passwords stay in your local Postman only; the committed environment file leaves them blank.
 4. Open the collection, choose **Run collection**, and run it with the backend started.
 
-Every request carries automated assertions. Expected result: **118 requests, 297 assertions, 0 failures**.
+Every request carries automated assertions. Expected result: **133 requests, 339 assertions, 0 failures**.
 
 **00 Health**
 
@@ -667,6 +738,21 @@ It only touches `postman+…@staffsync.test` accounts and refuses to run when `N
 | HR approves a request from outside any team | 200 |
 | Manager lists all / employee lists team | 403 |
 
+**06 Dashboards & Reports** (reads the data the earlier folders created in the same run)
+
+| Request | Expected |
+|---|---|
+| Employee dashboard for the leave employee | pending request counted, approved leave listed as upcoming |
+| Employee dashboard for the attendance employee | today `checked-out`, counted this month |
+| Manager dashboard | attendance employee shown `checked-out`; checked in + on leave + not in = team size; pending queue not empty |
+| HR dashboard | headcount by role adds up; someone checked in today; pending leave counted |
+| Department statistics | Engineering has a manager; active + inactive = total |
+| Attendance summary | Engineering has the half day from the attendance test; `byEmployee` paginated |
+| Leave summary | every status, type and month present; approved leave counted |
+| Reversed range / invalid year | 400 |
+| Wrong role on each dashboard or report | 403 |
+| Report without token | 401 |
+
 From the command line (no Postman install needed):
 
 ```bash
@@ -700,7 +786,8 @@ npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/St
 ## Known limitations (current phase)
 
 - No password change or reset endpoint yet.
-- Attendance has no "absent" records yet; days without a check-in simply have no record. Reports (Phase 9) will count them.
+- Absences are calculated in reports, not stored as records. There is no public-holiday calendar yet, so holidays count as absences.
+- Reports cover active employees only; someone deactivated part-way through a period drops out of that period's report.
 - Check-in and check-out must fall on the same calendar day.
 - Leave counts calendar days (weekends and public holidays included), and there are no leave balances or allowances yet.
 - Employees cannot cancel a leave request yet.

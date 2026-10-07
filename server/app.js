@@ -8,6 +8,8 @@ const authRoutes = require('./routes/authRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
 const attendanceRoutes = require('./routes/attendanceRoutes');
 const leaveRoutes = require('./routes/leaveRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
+const reportRoutes = require('./routes/reportRoutes');
 
 const app = express();
 
@@ -23,6 +25,8 @@ const routes = [
   ['/api/employees', employeeRoutes],
   ['/api/attendance', attendanceRoutes],
   ['/api/leaves', leaveRoutes],
+  ['/api/dashboard', dashboardRoutes],
+  ['/api/reports', reportRoutes],
 ];
 routes.forEach(([path, router]) => app.use(path, router));
 

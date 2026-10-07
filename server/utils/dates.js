@@ -56,6 +56,35 @@ const addDays = (dateString, days) => {
 // A YYYY-MM-DD string as a Date at midnight UTC, so the stored value never shifts a day.
 const dateStringToDate = (dateString) => new Date(`${dateString}T00:00:00Z`);
 
+// The calendar date part of a Date stored at midnight UTC (leave dates, joining dates).
+const dateToDateString = (date) => date.toISOString().slice(0, 10);
+
+// Whole days from `from` to `to`, counting both ends (0 if to is before from).
+const daysBetween = (from, to) => Math.max(0, Math.round((dateStringToDate(to) - dateStringToDate(from)) / 864e5) + 1);
+
+// ---- Working week (used for absence counting) ----
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DEFAULT_WORKING_DAYS = 'Mon,Tue,Wed,Thu,Fri';
+
+const parseWorkingDays = (value = process.env.WORKING_DAYS || DEFAULT_WORKING_DAYS) => {
+  const names = value.split(',').map((d) => d.trim()).filter(Boolean);
+  const unknown = names.filter((d) => !DAY_NAMES.includes(d));
+  if (names.length === 0 || unknown.length > 0) {
+    throw new Error(`WORKING_DAYS must list days like Mon,Tue,Wed,Thu,Fri; got "${value}".`);
+  }
+  return new Set(names.map((d) => DAY_NAMES.indexOf(d)));
+};
+
+// Called once at startup so a typo in WORKING_DAYS stops the server.
+const assertWorkingDays = () => parseWorkingDays();
+
+// Names of the configured working days, e.g. ['Mon', …, 'Fri'].
+const getWorkingDayNames = () => [...parseWorkingDays()].sort().map((i) => DAY_NAMES[i]);
+
+// True if a YYYY-MM-DD date falls on a configured working day.
+const isWorkingDay = (dateString, workingDays = parseWorkingDays()) =>
+  workingDays.has(dateStringToDate(dateString).getUTCDay());
+
 module.exports = {
   getTimeZone,
   isValidTimeZone,
@@ -65,5 +94,11 @@ module.exports = {
   isDateString,
   addDays,
   dateStringToDate,
+  dateToDateString,
+  daysBetween,
+  parseWorkingDays,
+  assertWorkingDays,
+  getWorkingDayNames,
+  isWorkingDay,
   DEFAULT_TIMEZONE,
 };

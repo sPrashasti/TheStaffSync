@@ -3555,6 +3555,411 @@
           }
         }
       ]
+    },
+    {
+      "name": "06 Dashboards & Reports",
+      "item": [
+        {
+          "name": "Employee dashboard (leave employee)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('sections present', () => pm.expect(body.data).to.include.keys('date', 'timeZone', 'today', 'thisMonth', 'leave'));",
+                  "pm.test('pending request counted', () => pm.expect(body.data.leave.pending).to.be.at.least(1));",
+                  "pm.test('approved leave is upcoming', () => pm.expect(body.data.leave.upcoming.map((l) => l._id)).to.include(pm.environment.get('leaveId')));",
+                  "pm.test('approved days this year counted', () => pm.expect(body.data.leave.approvedDaysThisYear).to.be.at.least(3));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/dashboard/employee"
+          }
+        },
+        {
+          "name": "Employee dashboard (attendance employee)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('checked out today', () => pm.expect(body.data.today.status).to.eql('checked-out'));",
+                  "pm.test('counted this month', () => pm.expect(body.data.thisMonth.present + body.data.thisMonth.halfDay).to.be.at.least(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{attToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/dashboard/employee"
+          }
+        },
+        {
+          "name": "Manager dashboard",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('sections present', () => { pm.expect(body.data).to.include.keys('me', 'team', 'pendingLeave'); pm.expect(body.data.team.today).to.include.keys('checkedIn', 'onLeave', 'notCheckedIn'); });",
+                  "const member = body.data.team.members.find((m) => m.employee._id === pm.environment.get('attEmployeeId'));",
+                  "pm.test('attendance employee shown as checked out', () => pm.expect(member && member.status).to.eql('checked-out'));",
+                  "pm.test('counts add up to team size', () => { const t = body.data.team.today; pm.expect(t.checkedIn + t.onLeave + t.notCheckedIn).to.eql(body.data.team.size); });",
+                  "pm.test('pending leave queue', () => pm.expect(body.data.pendingLeave.count).to.be.at.least(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/dashboard/manager"
+          }
+        },
+        {
+          "name": "HR dashboard",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('headcount by role', () => { const h = body.data.headcount; pm.expect(h.byRole.hr).to.be.at.least(1); pm.expect(h.byRole.manager).to.be.at.least(1); pm.expect(h.active).to.eql(h.byRole.employee + h.byRole.manager + h.byRole.hr); });",
+                  "pm.test('someone checked in today', () => pm.expect(body.data.today.checkedIn).to.be.at.least(1));",
+                  "pm.test('pending leave counted', () => pm.expect(body.data.leave.pending).to.be.at.least(1));",
+                  "pm.test('recent joiners listed', () => pm.expect(body.data.recentJoiners.length).to.be.at.least(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/dashboard/hr"
+          }
+        },
+        {
+          "name": "Department statistics",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const eng = body.data.departments.find((d) => d.department === 'Engineering');",
+                  "pm.test('Engineering has a manager', () => pm.expect(eng.managers).to.be.at.least(1));",
+                  "pm.test('active + inactive = total', () => body.data.departments.forEach((d) => pm.expect(d.active + d.inactive).to.eql(d.total)));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/department-stats"
+          }
+        },
+        {
+          "name": "Attendance summary (this month)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('range and working days reported', () => { pm.expect(body.data.from).to.match(/^\\d{4}-\\d{2}-01$/); pm.expect(body.data.workingDays).to.be.an('array').that.is.not.empty; });",
+                  "const eng = body.data.byDepartment.find((d) => d.department === 'Engineering');",
+                  "pm.test('Engineering half day from the attendance test', () => pm.expect(eng.halfDay).to.be.at.least(1));",
+                  "pm.test('byEmployee is paginated', () => pm.expect(body.data.byEmployee).to.include.keys('items', 'page', 'total', 'totalPages'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/attendance-summary?department=Engineering"
+          }
+        },
+        {
+          "name": "Attendance summary with reversed range returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('to error', () => pm.expect(body.errors[0].field).to.eql('to'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/attendance-summary?from=2026-09-30&to=2026-09-01"
+          }
+        },
+        {
+          "name": "Leave summary (this year)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('all statuses, types and months', () => { pm.expect(body.data.byStatus).to.have.all.keys('pending', 'approved', 'rejected'); pm.expect(body.data.byType).to.have.length(4); pm.expect(body.data.byMonth).to.have.length(12); });",
+                  "pm.test('approved leave from the leave test counted', () => pm.expect(body.data.byStatus.approved.requests).to.be.at.least(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/leave-summary"
+          }
+        },
+        {
+          "name": "Leave summary with invalid year returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/leave-summary?year=1999"
+          }
+        },
+        {
+          "name": "Employee cannot open manager dashboard",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql('You do not have permission to perform this action'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/dashboard/manager"
+          }
+        },
+        {
+          "name": "Manager cannot open HR dashboard",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql('You do not have permission to perform this action'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/dashboard/hr"
+          }
+        },
+        {
+          "name": "HR cannot open employee dashboard",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql('You do not have permission to perform this action'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/dashboard/employee"
+          }
+        },
+        {
+          "name": "Manager cannot view reports",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql('You do not have permission to perform this action'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/leave-summary"
+          }
+        },
+        {
+          "name": "Employee cannot view reports",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql('You do not have permission to perform this action'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{leaveToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/department-stats"
+          }
+        },
+        {
+          "name": "Reports without token return 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reports/attendance-summary"
+          }
+        }
+      ]
     }
   ],
   "variable": [
