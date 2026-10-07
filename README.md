@@ -21,7 +21,7 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | 10 | Announcements and training | ✅ Complete |
 | 11 | Notifications | ✅ Complete |
 | 12 | Frontend foundation: auth pages, session, protected routes, layout | ✅ Complete |
-| 13 | Role dashboards and pages using the real API | ⏳ Next |
+| 13 | Role dashboards and pages using the real API | ✅ Complete |
 | 14–18 | Testing, security hardening, optimisation, deployment | Planned |
 
 ## Tech stack
@@ -53,8 +53,15 @@ TheStaffSync/
 │   ├── server.js               Loads .env, connects to MongoDB, then starts listening
 │   └── .env.example
 ├── client/                     React (Vite) frontend
-│   ├── src/services/api.js     The single Axios instance
-│   ├── src/services/*.js       One service file per API module
+│   ├── src/services/api.js     The single Axios instance (adds the token, handles 401)
+│   ├── src/services/*.js       One service file per API module; the only place URLs appear
+│   ├── src/store/              Redux Toolkit: auth session and display preferences only
+│   ├── src/routes/             Route table, role menus, guards, lazy-loaded page map
+│   ├── src/layouts/            Signed-in shell (menu, top bar, notification bell)
+│   ├── src/pages/              One folder per area: auth, dashboards, attendance, leaves, …
+│   ├── src/components/         Shared UI (page header, stat cards, status chips, dialogs)
+│   ├── src/hooks/              useApi (load/reload data), useSnackbar (toasts)
+│   ├── src/utils/              Formatting (British, 24-hour), labels, safe localStorage
 │   ├── src/theme.js            Material UI theme
 │   └── .env.example
 └── docs/
@@ -148,11 +155,43 @@ npm run dev
 # → Local: http://localhost:5173/
 ```
 
-Open http://localhost:5173. The page calls `GET /api/health` through Axios and shows **"StaffSync API is running"**. If the backend is stopped, it shows **"Unable to reach the server. Check that the API is running."**
+Open http://localhost:5173 and log in. With the seed data you can use:
+
+| Role | Email | Password |
+|---|---|---|
+| HR | `SEED_HR_EMAIL` (e.g. `hr@staffsync.demo`) | `SEED_HR_PASSWORD` from `server/.env` |
+| Manager | `manager@staffsync.demo` | `SEED_DEMO_PASSWORD` |
+| Employee | `employee1@staffsync.demo` (or `employee2`, `employee3`) | `SEED_DEMO_PASSWORD` |
+
+New employees can also sign up at **/register**.
 
 `npm run dev` in the server uses Node's built-in `--watch` mode instead of nodemon (one fewer dependency, and nodemon currently pulls in a vulnerable file-watcher package). It restarts on code changes but **not** on `.env` changes — stop it with Ctrl+C and run it again after editing `.env`. Use `npm start` for production.
 
 The server connects to MongoDB **before** it starts listening. If the connection fails it prints the reason and exits, rather than running an API that cannot reach its data.
+
+## Frontend
+
+The React app has one area per role. Every page reads and writes through the real API; there is no mock data.
+
+| Page | Employee | Manager | HR |
+|---|---|---|---|
+| Dashboard | Today's check-in, month's attendance, leave, trainings, latest announcements | Same for themselves, plus the team today and the oldest pending leave | Headcount, today across the company, pending leave, trainings, recent joiners |
+| Attendance | Check in/out and history | Team history, plus own | Company history (filter by department and status), plus own |
+| Leave | Apply and track requests | Approve/reject team requests (pending first), plus own | Approve/reject any request |
+| Training | Browse, enrol, withdraw | Same, plus create and manage their own trainings | Create and manage any training, see participants |
+| Announcements | Read (own audience) | Read (own audience) | Publish, edit, delete |
+| Team / Employees / Managers | — | Direct reports | Directory with filters; add, edit (including time zone and manager), deactivate, reactivate |
+| Reports | — | — | Departments, attendance, leave and training reports |
+| Notifications | All roles: list, unread filter, mark read, mark all read; the top-bar bell shows the unread count and opens this page |
+| My profile | All roles: view, and edit own phone and address |
+
+**Behaviour worth knowing**
+
+- **Session:** the token is kept in `localStorage` so a refresh keeps you signed in. Any 401 from the API (expired token, account deactivated) signs you out and shows the reason on the login page. If the server is unreachable when the app opens, you get a retry screen rather than being logged out.
+- **Access:** `/employee/…`, `/manager/…` and `/hr/…` pages are only shown to that role, and `/` sends you to your own dashboard. This is for convenience only; the API enforces every permission itself.
+- **Times and dates:** everything uses British formatting and 24-hour times. Clock times (check-in, check-out, when something was posted) are shown in the **display time zone** chosen in the top bar. It defaults to India (IST), and the choice is remembered on that device. Calendar dates (leave, attendance days, trainings) never shift with the display zone.
+- **Forms** check the obvious rules before sending (for example password strength and date order) and show the API's field errors next to the right field.
+- **Loading:** each page's code is downloaded the first time it is opened.
 
 ## Database
 
@@ -673,7 +712,7 @@ HR and managers create trainings; employees and managers enrol.
 | `startDate`, `endDate` | `YYYY-MM-DD`, end not before start, start not in the past |
 | `capacity` | Whole number 1–1000 |
 
-Every training response adds `status` (`upcoming`, `ongoing`, `completed`), `enrolledCount`, `seatsLeft` and `isEnrolled` (for the caller). The **participant list** is only included for HR and the manager who created the training.
+Every training response adds `status` (`upcoming`, `ongoing`, `completed`), `enrolledCount`, `seatsLeft`, `isEnrolled` (for the caller) and `enrolmentOpen` (true until the end of the start day). The **participant list** is only included for HR and the manager who created the training.
 
 | Rule | Response |
 |---|---|
@@ -904,7 +943,8 @@ npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/St
 | 403 `This leave request is not from your team` | Only the applicant's direct manager (or HR) can decide it |
 | 404 `You have not checked in today` at check-out | No check-in exists for today in that employee's time zone, e.g. checked in before midnight, or HR changed their zone in between |
 | `Port 5000 is already in use` | Another process (or a second server terminal) is using the port — stop it or change `PORT` |
-| Page says "Unable to reach the server" | Backend not running, or `VITE_API_URL` wrong — restart Vite after editing `client/.env` |
+| "Can't reach StaffSync" screen, or "Unable to reach the server" | Backend not running, or `VITE_API_URL` wrong — restart Vite after editing `client/.env` |
+| Signed out unexpectedly with "This account has been deactivated" or "session has expired" | The API rejected the token; log in again (or ask HR to reactivate the account) |
 | `VITE_API_URL is not set` error in the browser | `client/.env` missing |
 | Works in Postman, fails in browser | CORS — see above |
 
@@ -919,4 +959,5 @@ npx newman run docs/postman/StaffSync.postman_collection.json -e docs/postman/St
 - Notifications are in-app only (no email), and old ones are never deleted automatically.
 - No rate limiting on login yet (security hardening, Phase 15).
 - No logout endpoint: tokens are stateless, so the client logs out by discarding the token. Deactivating a user blocks their tokens immediately.
-- The frontend is a single connection-check page; routing and role dashboards arrive in Phases 12–13.
+- The frontend has no automated UI tests yet (Phase 14), and the notification bell refreshes every minute rather than live.
+- The login token is stored in `localStorage`; moving it to an HTTP-only cookie is part of security hardening (Phase 15).

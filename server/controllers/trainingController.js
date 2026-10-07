@@ -42,6 +42,8 @@ const present = (req, training, today = companyToday()) => {
     enrolledCount: ids.length,
     seatsLeft: Math.max(0, training.capacity - ids.length),
     isEnrolled: ids.some((id) => id.equals(req.employee._id)),
+    // Enrolment and withdrawal stay open until the end of the start day.
+    enrolmentOpen: dateToDateString(training.startDate) >= today,
   };
 };
 
