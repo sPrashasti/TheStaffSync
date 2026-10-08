@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantScoped = require('./plugins/tenantScoped');
 
 const LEAVE_TYPES = ['casual', 'sick', 'earned', 'unpaid'];
 const LEAVE_STATUSES = ['pending', 'approved', 'rejected'];
@@ -66,8 +67,10 @@ leaveSchema.virtual('days').get(function days() {
   return Math.round((this.endDate - this.startDate) / 864e5) + 1;
 });
 
+leaveSchema.plugin(tenantScoped);
+
 leaveSchema.index({ employeeId: 1, status: 1 });
-leaveSchema.index({ status: 1, createdAt: -1 });
+leaveSchema.index({ organisationId: 1, status: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Leave', leaveSchema);
 module.exports.LEAVE_TYPES = LEAVE_TYPES;

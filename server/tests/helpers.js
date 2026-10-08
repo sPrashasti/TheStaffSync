@@ -18,13 +18,16 @@ const testUri = (name) => {
   return url.toString();
 };
 
-// Connects, empties the test database, builds indexes and starts the app.
-const setup = async (name) => {
+// Connects, empties the test database, builds indexes, creates a test organisation and starts
+// the app. Direct database calls in a test file run as that organisation (ctx.organisation),
+// unless the file asks for { strict: true }: then every direct call must say which organisation
+// it is for (ctx.inOrganisation), exactly like production code.
+const setup = async (name, { strict = false } = {}) => {
   process.env.MONGO_URI = testUri(name);
   process.env.NODE_ENV = 'test';
   // Tests send many requests from one address, so limits are generous unless a test file (such as
   // security.test.js) has already set its own.
-  for (const [key, value] of [['RATE_LIMIT_MAX_REQUESTS', '100000'], ['LOGIN_MAX_FAILURES', '1000'], ['REGISTER_MAX_PER_HOUR', '1000'], ['FORGOT_PASSWORD_MAX_PER_HOUR', '1000'], ['RESET_PASSWORD_MAX_ATTEMPTS', '1000']]) {
+  for (const [key, value] of [['RATE_LIMIT_MAX_REQUESTS', '100000'], ['LOGIN_MAX_FAILURES', '1000'], ['SIGNUP_MAX_PER_HOUR', '1000'], ['FORGOT_PASSWORD_MAX_PER_HOUR', '1000'], ['RESET_PASSWORD_MAX_ATTEMPTS', '1000']]) {
     if (process.env[key] === undefined) process.env[key] = value;
   }
 
@@ -48,6 +51,15 @@ const setup = async (name) => {
   await wipe();
   await Promise.all(Object.values(models).map((m) => m.syncIndexes()));
 
+  const { runAsPlatform, runInOrganisation, setTestFallback } = require('../utils/tenantContext');
+  const makeOrganisation = (orgName, extra = {}) => models.Organisation.create({
+    name: orgName,
+    slug: orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+    ...extra,
+  });
+  const organisation = await makeOrganisation('Test Organisation');
+  setTestFallback(strict ? undefined : organisation);
+
   const server = app.listen(0);
   const base = `http://localhost:${server.address().port}/api`;
 
@@ -64,7 +76,9 @@ const setup = async (name) => {
   };
 
   // Creates a user and employee directly in the database and returns a token for them.
-  const makeUser = async ({ name, email, role = 'employee', active = true, ...employee }) => {
+  // In the test organisation unless another is given.
+  const makeUser = ({ organisation: org = organisation, ...details }) => runInOrganisation(org, () => createUser(details));
+  const createUser = async ({ name, email, role = 'employee', active = true, ...employee }) => {
     const user = await models.User.create({
       name: name || email.split('@')[0],
       email,
@@ -79,10 +93,13 @@ const setup = async (name) => {
   const teardown = async () => {
     await new Promise((resolve) => server.close(resolve));
     await wipe();
+    setTestFallback(undefined);
     await mongoose.connection.close();
   };
 
-  return { app, base, call, makeUser, models, mongoose, signToken, wipe, teardown };
+  return {
+    app, base, call, makeUser, makeOrganisation, organisation, inOrganisation: runInOrganisation, asPlatform: runAsPlatform, models, mongoose, signToken, wipe, teardown,
+  };
 };
 
 module.exports = { setup };

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantScoped = require('./plugins/tenantScoped');
 
 const TARGET_AUDIENCES = ['all', 'employees', 'managers'];
 
@@ -30,7 +31,9 @@ const announcementSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-announcementSchema.index({ targetAudience: 1, createdAt: -1 });
+announcementSchema.plugin(tenantScoped);
+
+announcementSchema.index({ organisationId: 1, targetAudience: 1, createdAt: -1 });
 // Authors always see their own posts, whatever the audience.
 announcementSchema.index({ createdBy: 1, createdAt: -1 });
 

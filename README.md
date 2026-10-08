@@ -2,6 +2,8 @@
 
 StaffSync is a full-stack MERN (MongoDB, Express, React, Node.js) HR management system covering employees, attendance, leave approval, announcements, training, notifications and role-based dashboards for three roles: **Employee**, **Manager** and **HR**.
 
+StaffSync is multi-tenant: each company is its own **organisation**, signs up at `/signup`, and only ever sees its own data (see *Organisations and tenant isolation*).
+
 Every feature is backed by a real REST API and real MongoDB persistence — no mock data, no fake APIs. The full requirements analysis, permissions matrix, API plan and roadmap are in [docs/PHASE-0-REQUIREMENTS.md](docs/PHASE-0-REQUIREMENTS.md).
 
 ## Project status
@@ -12,7 +14,7 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | 1 | Project setup, health check, CORS, centralised Axios | ✅ Complete |
 | 2 | MongoDB connection + Mongoose models | ✅ Complete |
 | 3 | Backend foundation: response helpers, error mapping, validation | ✅ Complete |
-| 4 | Authentication (register, login, JWT) | ✅ Complete |
+| 4 | Authentication (login, JWT) | ✅ Complete |
 | 5 | Role-based access control, seed script, employee read endpoints | ✅ Complete |
 | 6 | Employee management (create, update, deactivate) | ✅ Complete |
 | 7 | Attendance (check-in, check-out, history) | ✅ Complete |
@@ -27,6 +29,7 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | 16 | Pagination and measured optimisation | ✅ Complete |
 | 17 | Full acceptance check ([docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)) | ✅ 29/30 automated; browser walkthrough pending |
 | 18 | Deployment configuration ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)) | ✅ Ready; live deployment needs your Render account |
+| 19 | Multi-tenant architecture (organisations, isolation, platform admin foundation) ([docs/PHASE-19-MULTITENANCY-PLAN.md](docs/PHASE-19-MULTITENANCY-PLAN.md)) | ✅ Complete |
 
 ## Tech stack
 
@@ -47,11 +50,12 @@ TheStaffSync/
 │   ├── controllers/            Request handlers (business logic)
 │   ├── middleware/             Error handling, validation, protect / authorize / loadEmployee
 │   ├── models/                 Mongoose schemas — models/index.js loads them all
+│   ├── models/plugins/         tenantScoped (organisation isolation), withPassword (shared password handling)
 │   ├── routes/                 Express routers — each one mounted in app.js
-│   ├── scripts/                Maintenance scripts (index sync, test-data clean-up, benchmark)
-│   ├── seed/seed.js            Creates the first HR account (and optional demo data)
+│   ├── scripts/                Maintenance scripts (index sync, test-data clean-up, benchmark, tenancy migration, platform admin)
+│   ├── seed/seed.js            Creates an organisation's first HR account (and optional demo data)
 │   ├── services/               Shared statistics used by dashboards and reports
-│   ├── utils/                  AppError, response helpers, pagination, JWT, password policy
+│   ├── utils/                  AppError, response helpers, pagination, JWT, password policy, tenant context
 │   ├── validators/             express-validator rules per module
 │   ├── app.js                  Builds the Express app (middleware + routes)
 │   ├── server.js               Loads .env, connects to MongoDB, then starts listening
@@ -77,6 +81,7 @@ TheStaffSync/
     ├── E2E-CHECKLIST.md        Manual browser walkthrough for all roles
     ├── RBAC.md                 Permission matrix per role, mapped to the brief
     ├── DEPLOYMENT.md           Step-by-step deployment (Render + Atlas)
+    ├── PHASE-19-MULTITENANCY-PLAN.md  Multi-tenant design, migration and decisions
     └── postman/                Postman collection + environment
 ```
 
@@ -102,13 +107,18 @@ npm install
 cp .env.example .env
 ```
 
-Then edit both `.env` files (see below), and create the first HR account:
+Then edit both `.env` files (see below). Most people need nothing more: start the app and sign up your company at **/signup**. You become HR of a new organisation and add everyone else.
+
+To create an organisation and its first HR account from the command line instead:
 
 ```bash
 cd server
-npm run seed          # first HR account, from SEED_HR_* in .env
-npm run seed:demo     # optional: also a demo manager with a team, for testing
+npm run seed -- --organisation "Company name"        # the organisation (created if new) + HR account from SEED_HR_* in .env
+npm run seed:demo -- --organisation "Company name"   # optional: also a demo manager with a team, for testing
 ```
+
+- `--hr-name "…"` and `--hr-email "…"` override `SEED_HR_NAME` and `SEED_HR_EMAIL`. `SEED_ORGANISATION` in `.env` is the default for `--organisation`.
+- Safe to re-run: existing accounts are left alone. An email already used in **another** organisation is refused, because emails are unique across StaffSync.
 
 ## Environment variables
 
@@ -130,14 +140,16 @@ npm run seed:demo     # optional: also a demo manager with a team, for testing
 | `LOGIN_MAX_FAILURES` | Failed logins (and failed password changes) allowed per account and address before a lock | `5` |
 | `RATE_LIMIT_WINDOW_MINUTES` | Length of the rate-limit window | `15` |
 | `RATE_LIMIT_MAX_REQUESTS` | Requests allowed per address per window, across the whole API | `1000` |
-| `REGISTER_MAX_PER_HOUR` | Self-registrations allowed per address per hour | `10` in production, `100` otherwise |
+| `SIGNUP_MAX_PER_HOUR` | Organisation sign-ups allowed per address per hour | `10` in production, `100` otherwise |
 | `TRUST_PROXY` | Number of proxies in front of the API (e.g. `1` on most hosts), so limits see the real client address. Leave unset when running directly | unset |
-| `WORKING_DAYS` | Working days used to count absences in reports, comma-separated from `Sun Mon Tue Wed Thu Fri Sat`; the server will not start with an invalid list | `Mon,Tue,Wed,Thu,Fri` (default); `Mon,Tue,Wed,Thu,Fri,Sat` for a six-day week |
-| `TIMEZONE` | Company **default** time zone (IANA name) for attendance and leave dates. HR can give individual employees their own (see *Time zones*). The server will not start with an invalid one | `Asia/Kolkata` (IST, the default if unset) |
-| `SEED_HR_NAME` | Name of the first HR account (seed script only) | `StaffSync HR` |
+| `WORKING_DAYS` | **Default for new organisations** (and code outside an organisation): working days used to count absences in reports, comma-separated from `Sun Mon Tue Wed Thu Fri Sat`. Each organisation then has its own, set by its HR. The server will not start with an invalid list | `Mon,Tue,Wed,Thu,Fri` (default); `Mon,Tue,Wed,Thu,Fri,Sat` for a six-day week |
+| `TIMEZONE` | **Default for new organisations** (and code outside an organisation): time zone (IANA name) for attendance and leave dates. Each organisation then has its own, set by its HR (see *Time zones*). The server will not start with an invalid one | `Asia/Kolkata` (IST, the default if unset) |
+| `SEED_ORGANISATION` | Optional: the default for the seed script's `--organisation` | — |
+| `SEED_HR_NAME` | Name of the organisation's first HR account (seed script only) | `StaffSync HR` |
 | `SEED_HR_EMAIL` | Email of the first HR account | `hr@example.com` |
 | `SEED_HR_PASSWORD` | Its password: 8+ characters with a letter and a number | — |
 | `SEED_DEMO_PASSWORD` | Shared password for the `npm run seed:demo` accounts | — |
+| `PLATFORM_ADMIN_PASSWORD` | Optional: used only by `npm run platform:create-admin` (see *Platform admins*). Remove it afterwards if you like | — |
 
 Generate a JWT secret:
 
@@ -166,9 +178,9 @@ npm run dev
 # → MongoDB connected: <host>/<database>
 # → StaffSync API listening on http://localhost:5000 (development)
 # → CORS allowed origins: http://localhost:5173
-# → Default time zone: Asia/Kolkata
-# → Working days: Mon, Tue, Wed, Thu, Fri
-# → Mounted routes: /api/health, /api/auth, /api/employees, /api/attendance, /api/leaves, /api/dashboard, /api/reports, /api/announcements, /api/trainings, /api/notifications
+# → Default time zone for new organisations: Asia/Kolkata
+# → Default working days: Mon, Tue, Wed, Thu, Fri
+# → Mounted routes: /api/health, /api/auth, /api/organisations, /api/platform, /api/employees, /api/attendance, /api/leaves, /api/dashboard, /api/reports, /api/announcements, /api/trainings, /api/notifications
 
 # Terminal 2 — frontend
 cd client
@@ -176,7 +188,7 @@ npm run dev
 # → Local: http://localhost:5173/
 ```
 
-Open http://localhost:5173 and log in. With the seed data you can use:
+Open http://localhost:5173 and either sign up a company at **/signup** or log in. With the seed data you can use:
 
 | Role | Email | Password |
 |---|---|---|
@@ -184,7 +196,7 @@ Open http://localhost:5173 and log in. With the seed data you can use:
 | Manager | `manager@staffsync.demo` | `SEED_DEMO_PASSWORD` |
 | Employee | `employee1@staffsync.demo` (or `employee2`, `employee3`) | `SEED_DEMO_PASSWORD` |
 
-New employees can also sign up at **/register**.
+Employees cannot sign themselves up: HR adds them. `/register` in the browser now redirects to `/signup`, which creates a **new** organisation.
 
 `npm run dev` in the server uses Node's built-in `--watch` mode instead of nodemon (one fewer dependency, and nodemon currently pulls in a vulnerable file-watcher package). It restarts on code changes but **not** on `.env` changes — stop it with Ctrl+C and run it again after editing `.env`. Use `npm start` for production.
 
@@ -203,6 +215,7 @@ The React app has one area per role. Every page reads and writes through the rea
 | Announcements | Read (own audience) | Read (own audience) | Publish, edit, delete |
 | Team / Employees / Managers | — | Direct reports | Directory with filters; add, edit (including time zone and manager), deactivate, reactivate |
 | Reports | — | — | Departments, attendance, leave and training reports |
+| Company settings | — | — | Organisation name, time zone and working days |
 | Notifications | All roles: list, unread filter, mark read, mark all read; the top-bar bell shows the unread count and opens this page |
 | My profile | All roles: view, and edit own phone and address |
 
@@ -218,6 +231,7 @@ The React app has one area per role. Every page reads and writes through the rea
 **Behaviour worth knowing**
 
 - **Session:** the token is kept in `localStorage` so a refresh keeps you signed in. Any 401 from the API (expired token, account deactivated) signs you out and shows the reason on the login page. If the server is unreachable when the app opens, you get a retry screen rather than being logged out.
+- **Sign-up:** `/signup` asks for the company name, your name, email and password, and signs you in as HR of the new organisation. The organisation's name is shown in the menu and top bar.
 - **Access:** `/employee/…`, `/manager/…` and `/hr/…` pages are only shown to that role, and `/` sends you to your own dashboard. This is for convenience only; the API enforces every permission itself.
 - **Times and dates:** everything uses British formatting and 24-hour times. Clock times (check-in, check-out, when something was posted) are shown in the **display time zone** chosen in the top bar. It defaults to India (IST), and the choice is remembered on that device. Calendar dates (leave, attendance days, trainings) never shift with the display zone.
 - **Forms** check the obvious rules before sending (for example password strength and date order) and show the API's field errors next to the right field.
@@ -240,14 +254,19 @@ MONGO_URI=mongodb+srv://<username>:<password>@<cluster-host>/staffsync?retryWrit
 
 | Model | Collection | Purpose | Indexes |
 |---|---|---|---|
-| `User` | users | Login identity and role (`employee`, `manager`, `hr`) | `email` unique; `{ role, isActive }` |
-| `Employee` | employees | Employment profile, one per user; `employeeId` auto-assigned (`EMP0001`…) | `userId` unique; `employeeId` unique; `managerId`; `department` |
-| `Attendance` | attendances | One record per employee per day (`date` is `YYYY-MM-DD`) | `{ employeeId, date }` **unique** — blocks double check-in; `date` |
-| `Leave` | leaves | Leave requests and their approval state | `{ employeeId, status }`; `{ status, createdAt }` |
-| `Announcement` | announcements | HR announcements with a target audience | `{ targetAudience, createdAt }` |
-| `Training` | trainings | Training programmes; `participants` cannot exceed `capacity` | `startDate`; `participants` |
+| `Organisation` | organisations | A customer company: `name`, `slug`, `status` (`active`, `suspended`), `settings: { timeZone, workingDays }` | `slug` unique |
+| `PlatformAdmin` | platformadmins | StaffSync operator accounts; no `organisationId` (see *Platform admins*) | `email` unique |
+| `User` | users | Login identity and role (`employee`, `manager`, `hr`) | `email` unique (across all organisations); `{ organisationId, role, isActive }` |
+| `Employee` | employees | Employment profile, one per user; `employeeId` auto-assigned per organisation (`EMP0001`…) | `userId` unique; `{ organisationId, employeeId }` unique; `managerId`; `{ organisationId, department }` |
+| `Attendance` | attendances | One record per employee per day (`date` is `YYYY-MM-DD`) | `{ employeeId, date }` **unique** — blocks double check-in; `{ organisationId, date, checkIn }` |
+| `Leave` | leaves | Leave requests and their approval state | `{ employeeId, status }`; `{ organisationId, status, createdAt }` |
+| `Announcement` | announcements | HR announcements with a target audience | `{ organisationId, targetAudience, createdAt }`; `{ createdBy, createdAt }` |
+| `Training` | trainings | Training programmes; `participants` cannot exceed `capacity` | `{ organisationId, startDate }`; `participants` |
 | `Notification` | notifications | Per-user notifications | `{ recipient, isRead, createdAt }` |
-| `Counter` | counters | Atomic sequence for `employeeId` (internal) | — |
+| `Counter` | counters | Atomic `employeeId` sequence, one per organisation (internal) | — |
+| — | migrations | Log of the Phase 19 tenancy migration, used by `--rollback` and `clean:test-data` (internal) | — |
+
+The organisation-owned collections (users, employees, attendances, leaves, announcements, trainings, notifications) all carry a required, unchangeable `organisationId`.
 
 Rules enforced by the schemas themselves: required fields, enums, maximum lengths, `endDate` not before `startDate`, check-out after check-in, date of birth in the past, whole-number capacity. Passwords use `select: false` and are also stripped from JSON output.
 
@@ -263,6 +282,34 @@ npm run db:indexes
 ```
 
 You can also see them in Atlas → *Browse Collections* → a collection → *Indexes*.
+
+### Upgrading an existing database to organisations (Phase 19)
+
+A database from before Phase 19 has no organisations. The migration script gives every record one. It is **non-destructive** (it adds `organisationId` and organisation records and changes indexes; it deletes and renames nothing) and safe to re-run.
+
+```bash
+cd server
+npm run migrate:tenancy -- --plan tenancy-plan.local.json             # dry run (default): prints everything, changes nothing
+npm run migrate:tenancy -- --export                                   # JSON copy of every collection into server/backups/
+npm run migrate:tenancy -- --plan tenancy-plan.local.json --apply     # exports first, then migrates and verifies
+npm run migrate:tenancy -- --plan tenancy-plan.local.json --rollback  # undoes --apply
+```
+
+The plan file says which accounts go to which organisation. Exactly one organisation is the `"default"`, which receives every account not listed elsewhere:
+
+```json
+{
+  "organisations": [
+    { "name": "Company A", "default": true },
+    { "name": "Company B", "emails": ["someone@example.com", "another@example.com"] }
+  ]
+}
+```
+
+- Records follow their owner: profiles, attendance and leave follow the employee, notifications the recipient, announcements and trainings the author. Manager links that would cross organisations are cleared (and restored by rollback).
+- Each organisation's employee codes continue from its own highest one.
+- Plan files (`*.local.json`) and `server/backups/` are git-ignored, because they hold personal data.
+- `--rollback` refuses, changing nothing, once organisations share employee codes or new organisations have signed up. Restore the export in `server/backups/` instead.
 
 ## API response format
 
@@ -300,12 +347,13 @@ All errors go through one handler ([server/middleware/errorMiddleware.js](server
 
 ## Adding a backend module
 
-Each module from Phase 4 onwards follows the same four steps:
+Each module from Phase 4 onwards follows the same steps:
 
 1. **Controller**: an `async` function per endpoint. Throw `new AppError(message, status)` for expected failures and reply with `sendSuccess` / `sendCreated` from `utils/apiResponse.js`. Express 5 forwards errors from async functions to the error handler, so no try/catch or wrapper is needed.
 2. **Routes**: `protect`, then `authorize(...roles)` if only some roles may call it, then express-validator chains and `validate`, then the controller. Use `validateObjectId()` on any `:id` route, and `loadEmployee` when the controller needs the caller's own employee record.
-3. **Mount**: add one line to the `routes` table in [server/app.js](server/app.js). The dev boot log prints this table, so check your path appears.
-4. **Test**: add requests to the Postman collection covering the success case and each error case.
+3. **Model** (if new): data that belongs to a company must use `schema.plugin(tenantScoped)`, so it is isolated automatically, and indexes should start with `organisationId`.
+4. **Mount**: add one line to the `routes` table in [server/app.js](server/app.js). The dev boot log prints this table, so check your path appears.
+5. **Test**: add requests to the Postman collection covering the success case and each error case.
 
 ```js
 // routes/exampleRoutes.js
@@ -325,8 +373,10 @@ const getExample = async (req, res) => {
 | Method | URL | Auth | Role | Success | Errors |
 |---|---|---|---|---|---|
 | GET | `/api/health` | No | – | 200 | – |
-| POST | `/api/auth/register` | No | – (always creates an employee) | 201 | 400, 409 |
-| POST | `/api/auth/login` | No | – | 200 | 400, 401 |
+| POST | `/api/organisations/signup` | No | – (always creates a new organisation and its HR) | 201 | 400, 409, 429 |
+| GET | `/api/organisations/me` | Yes | any | 200 | 401 |
+| PUT | `/api/organisations/me` | Yes | hr | 200 | 400, 401, 403 |
+| POST | `/api/auth/login` | No | – | 200 | 400, 401, 403 |
 | GET | `/api/auth/me` | Yes | any | 200 | 401 |
 | PUT | `/api/auth/password` | Yes | any | 200 | 400, 401, 429 |
 | POST | `/api/auth/forgot-password` | No | – | 200 | 400, 429, 503 |
@@ -375,6 +425,11 @@ const getExample = async (req, res) => {
 | GET | `/api/notifications` | Yes | any (own only) | 200 | 400, 401 |
 | PUT | `/api/notifications/:id/read` | Yes | owner | 200 | 400, 401, 404 |
 | PUT | `/api/notifications/read-all` | Yes | owner | 200 | 401 |
+| POST | `/api/platform/auth/login` | No | – (platform admins only) | 200 | 400, 401 |
+| GET | `/api/platform/me` | Platform token | platform admin | 200 | 401 |
+| GET | `/api/platform/organisations` | Platform token | platform admin | 200 | 401 |
+
+"Yes" means an organisation user's token. Every endpoint marked "Yes" can also answer **403** when the user's organisation is suspended.
 
 More endpoints are added and documented phase by phase; the full planned list is in [docs/PHASE-0-REQUIREMENTS.md](docs/PHASE-0-REQUIREMENTS.md#5-api-endpoint-list).
 
@@ -399,55 +454,48 @@ Reports that the API is alive and the current MongoDB connection state.
 
 ### Authentication
 
-Send the token from register or login on every protected request:
+Send the token from sign-up or login on every protected request:
 
 ```
 Authorization: Bearer <token>
 ```
 
-Tokens last `JWT_EXPIRES_IN` (default `1d`) and contain only the user's id. Role and active status are read from the database on every request, so if HR deactivates someone or changes their role, it applies straight away, even to tokens already issued.
+Tokens last `JWT_EXPIRES_IN` (default `1d`) and contain only the account id and a `scope`: `org` for organisation users, `platform` for platform admins. Role, organisation and active status are read from the database on every request, so if HR deactivates someone or changes their role, it applies straight away, even to tokens already issued.
+
+- The organisation API refuses platform tokens, and the platform API refuses organisation tokens (**401**).
+- Tokens issued before Phase 19 have no scope, so everyone has to log in again once.
 
 | Response | Meaning |
 |---|---|
 | 401 `Not authenticated. Please log in.` | No `Authorization: Bearer …` header |
-| 401 `Invalid token. Please log in again.` | Token malformed, tampered with or signed with another secret |
+| 401 `Invalid token. Please log in again.` | Token malformed, tampered with, signed with another secret, or of the wrong scope |
 | 401 `Your session has expired. Please log in again.` | Token past its expiry |
 | 401 `The account for this token no longer exists.` | User deleted |
 | 401 `This account has been deactivated.` | User deactivated by HR |
+| 403 `Your organisation's StaffSync account is suspended. Contact StaffSync support.` | The user's organisation is suspended |
 
-### POST /api/auth/register
+### POST /api/organisations/signup
 
-Public sign-up. **Always creates an `employee`**: any `role` or other extra field in the body is ignored. Manager and HR accounts are created by HR (Phase 6).
+Public. A company starts using StaffSync. Creates a **new** organisation, and the person signing up becomes its **HR**. HR then adds everyone else (`POST /api/employees`). Sign-up can never add anyone to an existing organisation. There is no employee self-registration: `POST /api/auth/register` no longer exists (**404**).
 
 ```json
-{ "name": "Asha Kumar", "email": "asha@example.com", "password": "Passw0rd123" }
+{ "companyName": "Acme Ltd", "name": "Asha Kumar", "email": "asha@example.com", "password": "Passw0rd123" }
 ```
 
 | Field | Rules |
 |---|---|
+| `companyName` | Required, 2–100 characters |
 | `name` | Required, up to 100 characters |
-| `email` | Required, valid email; stored lower-case |
+| `email` | Required, valid email; stored lower-case; must not be used in **any** organisation |
 | `password` | 8 characters to 72 bytes, at least one letter and one number |
 
-The 72-byte limit exists because bcrypt ignores anything after it.
+Any other field, such as `role` or `organisationId`, is refused with **400** `Unknown field`. The 72-byte limit exists because bcrypt ignores anything after it.
 
-The account and an employee profile are created together in one transaction. The profile's department and designation start as `Unassigned` until HR updates them.
+The organisation, the HR account and their employee profile are created together in one transaction. The organisation starts with the default time zone and working days from `.env`, and its employee codes start at `EMP0001`.
 
-**201**
+**201** `Organisation created` with `data: { token, user, employee, organisation }`.
 
-```json
-{
-  "success": true,
-  "message": "Registration successful",
-  "data": {
-    "token": "eyJhbGciOi…",
-    "user": { "_id": "…", "name": "Asha Kumar", "email": "asha@example.com", "role": "employee", "isActive": true, "createdAt": "…", "updatedAt": "…" },
-    "employee": { "_id": "…", "userId": "…", "employeeId": "EMP0001", "department": "Unassigned", "designation": "Unassigned", "managerId": null, "joiningDate": "…" }
-  }
-}
-```
-
-**400** `Validation failed` with `errors` · **409** `An account with this email already exists`
+**400** `Validation failed` with `errors` · **409** `An account with this email already exists` · **429** after `SIGNUP_MAX_PER_HOUR` sign-ups from one address
 
 ### POST /api/auth/login
 
@@ -455,9 +503,9 @@ The account and an employee profile are created together in one transaction. The
 { "email": "asha@example.com", "password": "Passw0rd123" }
 ```
 
-**200** `Login successful` with `data: { token, user }`.
+**200** `Login successful` with `data: { token, user, organisation }`. Users of every organisation log in here; emails are unique across StaffSync, so the email alone identifies the organisation.
 
-**401** `Invalid email or password` for both an unknown email and a wrong password, and both take the same time, so neither reveals whether an account exists. A deactivated account gets **401** `This account has been deactivated. Contact HR.`, but only once the correct password has been given.
+**401** `Invalid email or password` for both an unknown email and a wrong password, and both take the same time, so neither reveals whether an account exists. A deactivated account gets **401** `This account has been deactivated. Contact HR.`, and a suspended organisation's users get **403**, but only once the correct password has been given.
 
 ### Forgot password (email reset)
 
@@ -494,7 +542,29 @@ In the app: **My profile → Change password**.
 
 ### GET /api/auth/me
 
-Requires a token. **200** `Current user` with `data: { user, employee }`.
+Requires a token. **200** `Current user` with `data: { user, employee, organisation }`.
+
+### GET /api/organisations/me (any role)
+
+**200** `Organisation` with the caller's own organisation: `_id`, `name`, `slug` and `settings: { timeZone, workingDays }`. Platform fields such as `status` are not included. There is no route that takes an organisation id, so one organisation can never address another.
+
+### PUT /api/organisations/me (hr)
+
+Changes the HR user's own organisation. Send only what changes:
+
+```json
+{ "name": "Acme Ltd", "settings": { "timeZone": "Europe/London", "workingDays": ["Mon", "Tue", "Wed", "Thu", "Fri"] } }
+```
+
+| Field | Rules |
+|---|---|
+| `name` | 2–100 characters |
+| `settings.timeZone` | IANA name, e.g. `Europe/London` |
+| `settings.workingDays` | 1–7 distinct values from `Mon` `Tue` `Wed` `Thu` `Fri` `Sat` `Sun` |
+
+`status` and `slug` are platform-level and refused with **400** `Unknown field`, as is any other field. An empty body gives **400** `Nothing to update`. Other roles get **403**. **200** `Organisation updated`.
+
+In the app: **Company settings** in the HR menu.
 
 ### Role-based access
 
@@ -508,6 +578,44 @@ The role always comes from the database, never from the token or the request, so
 A manager's **team** is every employee whose `managerId` is the manager's own employee record.
 
 The full permission matrix for every feature and role, with the mapping to the project brief, is in [docs/RBAC.md](docs/RBAC.md).
+
+### Organisations and tenant isolation
+
+Every company's data is kept apart in four layers, all on the server:
+
+| Layer | How |
+|---|---|
+| 1. Organisation from the database | `protect` takes the organisation from the user's database record, never from the token or the request. No endpoint accepts an organisation id |
+| 2. Per-request context | The rest of the request runs inside that organisation, carried through every `await` with Node's `AsyncLocalStorage` ([server/utils/tenantContext.js](server/utils/tenantContext.js)) |
+| 3. `tenantScoped` plugin | On every organisation-owned model ([server/models/plugins/tenantScoped.js](server/models/plugins/tenantScoped.js)): scopes every query, update, delete and aggregation, including nested `$lookup` joins; stamps new documents with the organisation; makes `organisationId` immutable. A query with no organisation context **throws** rather than returning every company's data. Platform-level code (login, sign-up, password reset, the platform API, scripts) opts out explicitly with `runAsPlatform()` |
+| 4. Role and team checks | `authorize(...roles)`, "own" and "team" scoping, as before |
+
+- Another organisation's record, requested by id, gives **404**, so its existence is not revealed.
+- Emails are unique across the whole platform, so sign-in needs only the email.
+- Employee codes (`EMP0001`…) are numbered per organisation, so two organisations can both have an `EMP0001`.
+- Time zone and working days are per organisation (see *Time zones*).
+- A **suspended** organisation keeps its data, but its users get **403** at login and on every request.
+
+### Platform admins
+
+A platform admin is a StaffSync operator who manages organisations. It is a separate kind of account, **not a role**:
+
+- It lives in its own collection (`platformadmins`) with no `organisationId`.
+- It signs in at `POST /api/platform/auth/login` and gets a `platform` token, which the organisation API refuses. Organisation users, HR included, cannot sign in there.
+- No API creates one. The only way is the command line, with the password from `PLATFORM_ADMIN_PASSWORD` in `server/.env` (never on the command line, where it would stay in your shell history):
+
+  ```bash
+  cd server
+  npm run platform:create-admin -- --name "Your Name" --email "you@example.com"
+  ```
+
+| Endpoint | Returns |
+|---|---|
+| `POST /api/platform/auth/login` | **200** `data: { token, admin }`; **401** `Invalid email or password` |
+| `GET /api/platform/me` | The signed-in platform admin |
+| `GET /api/platform/organisations` | Read-only list: `name`, `slug`, `status`, `createdAt`, `users`, `activeUsers`. No people's details |
+
+This is the foundation only; the full platform console (suspending organisations, support tools and so on) is planned for Phase 21.
 
 ### GET /api/employees (hr)
 
@@ -558,7 +666,7 @@ Creates the login account and the employee profile together, in one transaction.
 
 | Field | Rules |
 |---|---|
-| `name`, `email`, `password` | Required; same rules as registration |
+| `name`, `email`, `password` | Required; same rules as sign-up |
 | `role` | `employee` (default), `manager` or `hr` |
 | `department`, `designation` | Required, up to 100 characters |
 | `joiningDate` | `YYYY-MM-DD`; defaults to today |
@@ -566,9 +674,9 @@ Creates the login account and the employee profile together, in one transaction.
 | `managerId` | Employee `_id` of an **active manager** |
 | `phone` | 7–20 digits, spaces, `-`, optional leading `+` |
 | `address` | Up to 300 characters |
-| `timeZone` | IANA name such as `Europe/London`; omit or `null` for the company default (see *Time zones*) |
+| `timeZone` | IANA name such as `Europe/London`; omit or `null` for the organisation's time zone (see *Time zones*) |
 
-Any other field, such as `isActive` or `employeeId`, is rejected with **400** `Unknown field`. **201** `Employee created` · **409** if the email is taken.
+Any other field, such as `isActive` or `employeeId`, is rejected with **400** `Unknown field`. **201** `Employee created`, in HR's own organisation · **409** if the email is taken in any organisation.
 
 ### PUT /api/employees/:id
 
@@ -590,7 +698,7 @@ Send only the fields to change. `null` clears `phone`, `address`, `dateOfBirth` 
 | HR cannot change their own role or deactivate themselves | 400 |
 | There must always be at least one active HR account | 409 |
 | A manager cannot be demoted while anyone reports to them, or deactivated while an active employee reports to them; reassign the team first | 409 |
-| Email must stay unique | 409 |
+| Email must stay unique across all organisations | 409 |
 
 ### Attendance
 
@@ -619,20 +727,20 @@ Team and HR results include `employeeId: { employeeId, department, designation, 
 
 Dates for attendance and leave ("which day is today?") are always worked out on the server:
 
-1. **Company default:** `TIMEZONE` in `server/.env`, **`Asia/Kolkata` (IST)** if unset.
+1. **Organisation's time zone:** each organisation's own `settings.timeZone`, set by its HR on the **Company settings** page or with `PUT /api/organisations/me`. `TIMEZONE` in `server/.env` (**`Asia/Kolkata` (IST)** if unset) is only the default given to new organisations.
 2. **Per employee:** HR can give an employee their own zone, for example someone working from the UK:
 
    ```
    PUT /api/employees/:id   { "timeZone": "Europe/London" }
-   PUT /api/employees/:id   { "timeZone": null }            ← back to the company default
+   PUT /api/employees/:id   { "timeZone": null }            ← back to the organisation's time zone
    ```
 
    That employee's check-in day, check-out and "leave cannot start in the past" rule then follow their own calendar.
 
 - Only HR can set an employee's zone. Employees cannot change their own, which stops anyone moving a check-in to a different day.
 - Any IANA name is accepted (`Asia/Kolkata`, `Europe/London`, `America/New_York`, `UTC`…). An invalid name gives **400**.
-- `timeZone: null` on an employee means "company default". `GET /api/attendance/today` returns the zone actually in use.
-- Changing `TIMEZONE` needs a server restart. `npm run dev` restarts on code changes and re-reads `.env` then, but not when only `.env` changes.
+- `timeZone: null` on an employee means "the organisation's time zone". `GET /api/attendance/today` returns the zone actually in use.
+- A change in **Company settings** applies from the next request. Changing `TIMEZONE` in `.env` affects only organisations created afterwards, and needs a server restart. `npm run dev` restarts on code changes and re-reads `.env` then, but not when only `.env` changes.
 - Times (`checkIn`, `checkOut`, `createdAt`) are always returned in UTC (`…Z`). Showing them in the viewer's local time is the frontend's job.
 
 ### Leave
@@ -726,7 +834,7 @@ How the counts work:
 - `present` / `halfDay` / `totalHours` come from attendance records. Working on a non-working day still counts.
 - `onLeave`: working days with **approved** leave and no check-in.
 - `absent`: working days with neither a check-in nor approved leave. Pending leave does not excuse a day. Counting starts at the employee's `joiningDate` and stops at **yesterday** in their time zone, so today never counts as absent.
-- The working week is `WORKING_DAYS`. Public holidays are not known yet, so they count as absences.
+- The working week is the organisation's own `settings.workingDays`, set by its HR in **Company settings**. `WORKING_DAYS` in `.env` is only the default for new organisations. Public holidays are not known yet, so they count as absences.
 
 **`GET /api/reports/leave-summary`**: optional `?year=` (default this year) and `?department=`.
 
@@ -800,7 +908,7 @@ Every training response adds `status` (`upcoming`, `ongoing`, `completed`), `enr
 
 Enrolment is a single atomic update that checks seats, duplicates and dates together. Ten people racing for two seats get exactly two places.
 
-`GET /api/trainings` is paginated, soonest first, and accepts `?status=upcoming|ongoing|completed` and `?enrolled=true` (only trainings you are enrolled in). Training dates are judged in the company default time zone.
+`GET /api/trainings` is paginated, soonest first, and accepts `?status=upcoming|ongoing|completed` and `?enrolled=true` (only trainings you are enrolled in). Training dates are judged in the organisation's time zone.
 
 ### Notifications
 
@@ -808,9 +916,9 @@ Notifications are created automatically by other modules and stored in MongoDB:
 
 | Event | Recipients | Title |
 |---|---|---|
-| Leave requested | The applicant's manager; if they have none, or the manager is deactivated, every active HR user | `New leave request` |
+| Leave requested | The applicant's manager; if they have none, or the manager is deactivated, every active HR user in the organisation | `New leave request` |
 | Leave approved / rejected | The applicant (rejections include the reason) | `Leave approved` / `Leave rejected` |
-| Announcement published | Every active user in its audience, except the author | `New announcement` |
+| Announcement published | Every active user in its audience in the organisation, except the author | `New announcement` |
 | Training title, trainer or dates changed | Everyone enrolled | `Training updated` |
 | Training deleted | Everyone enrolled | `Training cancelled` |
 
@@ -878,13 +986,14 @@ The requirements checklist (docs/PHASE-0-REQUIREMENTS.md §12) and the extra har
 | Protection | How |
 |---|---|
 | Passwords | bcrypt cost 12; never selected or returned; 8–72 bytes with a letter and a number |
-| Tokens | HS256 pinned, `JWT_SECRET` ≥ 32 characters checked at start-up, payload holds only the user id; role, active status and password changes are re-checked on **every** request |
+| Tokens | HS256 pinned, `JWT_SECRET` ≥ 32 characters checked at start-up, payload holds only the account id and its scope (`org` or `platform`), and each API accepts only its own scope; role, organisation, active status and password changes are re-checked on **every** request |
 | Password change | Requires the current password; revokes every older token |
 | Password reset | Email link with a random single-use token, stored only as a hash, valid 30 minutes; same reply for known and unknown emails; rate-limited; signs out every session; names are escaped in the HTML email |
-| Brute force | Failed logins limited per account and address (`LOGIN_MAX_FAILURES`, default 5 per 15 minutes) → **429**; successful logins never count; other accounts are unaffected. Registration and the whole API are also rate-limited per address |
+| Brute force | Failed logins limited per account and address (`LOGIN_MAX_FAILURES`, default 5 per 15 minutes) → **429**; successful logins never count; other accounts are unaffected. Organisation sign-up and the whole API are also rate-limited per address |
 | Account enumeration | Same message and timing for an unknown email and a wrong password |
-| Privilege escalation | Self-registration always creates an employee; `role`, `isActive` and similar fields are ignored or refused; only HR changes roles; the last active HR cannot be removed |
+| Privilege escalation | No employee self-registration; sign-up only ever creates a new organisation, and `role`, `isActive`, `organisationId` and similar fields are refused; only HR changes roles; the last active HR cannot be removed |
 | Access control | `protect` + `authorize(roles)` on every route; "own" and "team" data resolved on the server from the token, never from request parameters |
+| Tenant isolation | Organisation taken from the user's database record; every organisation-owned query scoped by the `tenantScoped` plugin, which throws without an organisation context; another organisation's records give 404; platform admins are separate accounts created only from the command line (see *Organisations and tenant isolation*) |
 | Injection | Every write endpoint is validated with a whitelist of fields (unknown fields → 400); values must be the right type, so `{ "$gt": "" }` is rejected; unknown and **repeated** query parameters → 400; queries on fields outside the schema throw |
 | Headers | `helmet`: `nosniff`, HSTS, `frame-ancestors 'none'`, a CSP that allows nothing (the API only serves JSON), no `X-Powered-By`; every response is `Cache-Control: no-store` |
 | CORS | Only origins in `CLIENT_URL`; the server refuses to start in production without it |
@@ -915,7 +1024,7 @@ Symptom of a CORS misconfiguration: the request works in Postman but the browser
 
 There are three layers of tests, from fastest to most realistic.
 
-**1. API test suite** (`server`, 137 tests, about 30 seconds)
+**1. API test suite** (`server`, 155 tests, about 30 seconds)
 
 ```bash
 cd server
@@ -924,12 +1033,13 @@ npm test
 
 - Starts the real app on a random port and calls it over HTTP, exactly as the frontend does.
 - Each test file uses its own throwaway database on the same cluster as `MONGO_URI` (`staffsync_test_<area>`), emptied before and after, so files run in parallel and **your real data is never touched**. Set `TEST_MONGO_URI` to use a different cluster. The suite refuses to run against a database whose name does not contain `test`.
+- Each file runs inside a test organisation by default, so direct database calls in a test need no wrapping. `tenant-isolation.test.js` runs in **strict** mode instead: there is no default organisation, so any code path that forgets its organisation fails.
 - No extra packages: it uses Node's built-in test runner.
 
 | File | Covers |
 |---|---|
 | `foundation.test.js` | Response envelope, error mapping (400/404/409/413/500), validation, pagination |
-| `auth.test.js` | Registration, password policy, login, tokens (expired, forged, `alg: none`), deactivation |
+| `auth.test.js` | No self-registration, organisation sign-up (transactional, unique emails across organisations), password policy, login, tokens (expired, forged, `alg: none`), deactivation |
 | `employees.test.js` | Role checks, team scoping, self-edit limits, reporting lines, last-HR rule, time zones |
 | `attendance.test.js` | Date helpers, one check-in per day under concurrency, half/full days, filters, per-employee time zones |
 | `leave.test.js` | Date rules, overlaps under concurrency, who may decide, decide-once race, list scoping |
@@ -937,10 +1047,11 @@ npm test
 | `announcements-training.test.js` | Audiences, ten people racing for two seats, capacity, ownership, enrolment closing |
 | `notifications.test.js` | Who is notified for each event, read/read-all, failures never blocking the action |
 | `password-reset.test.js` | Same reply for unknown emails, emailed single-use link, hashed token, expiry, newer link cancels older, sessions revoked, deactivated accounts, limits, production without email |
-| `security.test.js` | Headers, CORS, repeated parameters, operator injection, ignored privilege fields, sign-up and failed-login limits, password change revoking old tokens, production config, no password hashes in responses |
+| `security.test.js` | Headers, CORS, repeated parameters, operator injection, refused privilege fields on sign-up, sign-up and failed-login limits, password change revoking old tokens, production config, no password hashes in responses |
 | `client-app.test.js` | Production page serving: strict page CSP, deep links, asset caching, API kept as JSON |
-| `acceptance-endpoints.test.js` | Every endpoint planned in the requirements and the brief (43) is mounted, open to the roles allowed and refused to a role that is not |
-| `leave-workflow.e2e.test.js` | **End to end:** HR creates a manager → employee registers → HR places them in the team → employee applies → manager notified and approves → employee notified → HR sees the same record and totals → rejection path → deactivation keeps history |
+| `acceptance-endpoints.test.js` | Every endpoint planned in the requirements and the brief, plus the organisation endpoints (45), is mounted, open to the roles allowed and refused to a role that is not |
+| `tenant-isolation.test.js` | **Strict mode.** The `tenantScoped` plugin (throws without context, scopes reads, never writes across organisations); two look-alike organisations through the API (own lists only, 404 for the other's records, no cross-organisation links or notifications, settings per organisation); suspension; sign-in and password reset across organisations; platform-admin separation (own login, tokens refused across APIs, no people's details, no create API) |
+| `leave-workflow.e2e.test.js` | **End to end:** HR creates a manager → HR creates an employee → HR places them in the team → employee applies → manager notified and approves → employee notified → HR sees the same record and totals → rejection path → deactivation keeps history |
 
 **2. Client tests** (`client`, a few seconds)
 
@@ -962,7 +1073,7 @@ The Postman collection below remains the quickest way to exercise a running serv
 3. Click the environment's eye icon and fill in **hrPassword** and **managerPassword**. These are `SEED_HR_PASSWORD` and `SEED_DEMO_PASSWORD` from `server/.env`. Run `npm run seed:demo` first if you haven't. The passwords stay in your local Postman only; the committed environment file leaves them blank.
 4. Open the collection, choose **Run collection**, and run it with the backend started.
 
-Every request carries automated assertions. Expected result: **178 requests, 434 assertions, 0 failures**.
+Every request carries automated assertions. Expected result: **187 requests, 464 assertions, 0 failures**.
 
 **00 Health**
 
@@ -973,23 +1084,32 @@ Every request carries automated assertions. Expected result: **178 requests, 434
 | Malformed JSON body | 400, `Request body contains invalid JSON` |
 | Disallowed CORS origin | 403, `success: false` |
 
-**01 Auth** (run in order; register and login save `employeeToken` to the environment)
+**01 Auth** (run in order; needs the seeded HR. Saves `hrToken`, `employeeToken` and `otherOrgHrToken` to the environment)
 
 | Request | Expected |
 |---|---|
-| Register employee | 201, token, role `employee`, `EMP…` profile, no password in response |
-| Register ignores role field | 201, role still `employee` although `"role": "hr"` was sent |
-| Register duplicate email | 409 |
-| Register missing fields | 400, errors for name, email and password |
-| Register weak password | 400, password not echoed back |
+| Setup: log in as HR | 200, `organisation` returned |
+| Self-registration has been removed | 404 for `POST /api/auth/register` |
+| HR creates employee for auth tests | 201, role `employee`, `EMP…` code, no password in response |
+| Sign up a second organisation | 201, signer-up is HR of the new organisation, which starts at `EMP0001`; saves `otherOrgHrToken` |
+| Sign-up refuses a role field | 400, `role` reported as an unknown field |
+| Sign-up with an email used in another organisation | 409 |
+| Sign-up missing fields | 400 |
+| Sign-up weak password | 400, password not echoed back |
+| Other organisation cannot read this employee | 404 |
+| Other organisation lists only its own people | 200, only its own HR, nobody from the demo organisation |
 | Login | 200, token |
 | Login email is case-insensitive | 200 |
 | Login wrong password / unknown email | 401, same `Invalid email or password` |
 | Login with operator injection (`{ "$gt": "" }`) | 400 |
-| Get current user | 200, user and `Unassigned` employee profile |
+| Get current user | 200, user, `Unassigned` employee profile and `organisation` |
+| Get my organisation | 200, name and settings, no platform fields |
+| Employee cannot change organisation settings | 403 |
+| HR cannot change organisation status | 400, `status` reported as an unknown field |
+| Organisation token cannot use the platform API | 401 |
 | Get current user without token / invalid token / wrong scheme | 401 |
 
-Each run creates a few `postman+…@staffsync.test` accounts so the collection can be re-run. To remove them and everything linked to them (attendance, leave, their notifications, and other people's notifications about their leave), run:
+Each run creates a few `postman+…@staffsync.test` accounts, and one throwaway organisation from the sign-up request, so the collection can be re-run. To remove them and everything linked to them (attendance, leave, their notifications, other people's notifications about their leave, and the throwaway organisations), run:
 
 ```bash
 cd server
@@ -997,7 +1117,7 @@ npm run clean:test-data            # shows what would be deleted
 npm run clean:test-data -- --yes   # deletes it
 ```
 
-It only touches `postman+…@staffsync.test` accounts and refuses to run when `NODE_ENV=production`.
+It only touches `postman+…@staffsync.test` accounts and organisations left with nobody else in them, and refuses to run when `NODE_ENV=production`. Test accounts that already existed when the Phase 19 migration ran are kept as demo data, unless you add `--include-preserved`.
 
 **02 RBAC** (needs the seeded HR and demo manager; logs in and saves `hrToken` and `managerToken`)
 
@@ -1131,7 +1251,7 @@ In production StaffSync runs as **one service**: the Express server also serves 
 
 Pages get a strict Content-Security-Policy: scripts only from the site itself, no inline scripts (the theme start-up script is a file for this reason), fonts from Google Fonts, `frame-ancestors 'none'`.
 
-**Deploy:** follow [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). On Render it is *New → Blueprint* from this repository using [render.yaml](render.yaml), then set `MONGO_URI` and seed the first HR account. Any other Node.js host can use `npm run build` and `npm start` from the repository root.
+**Deploy:** follow [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). On Render it is *New → Blueprint* from this repository using [render.yaml](render.yaml), then set `MONGO_URI` and sign up your company at `/signup` (or seed the first HR account). Any other Node.js host can use `npm run build` and `npm start` from the repository root.
 
 **Continuous integration:** [.github/workflows/ci.yml](.github/workflows/ci.yml) runs client lint, client tests, the production build, and the full API suite against a throwaway MongoDB on every push.
 
@@ -1151,8 +1271,11 @@ Pages get a strict Content-Security-Policy: scripts only from the site itself, n
 | Server exits with a timeout / `ServerSelectionError` | Your IP is not on the Atlas Network Access list, or local MongoDB is not running |
 | A new endpoint returns `Route not found` | Its router is not in the `routes` table in `app.js` — check the `Mounted routes` boot log |
 | 403 `You do not have permission…` | The logged-in role is not allowed on that endpoint — see the API reference |
-| 404 `No employee profile exists for this account` | The user has no Employee record; register through the API or the seed script rather than inserting users by hand |
+| 404 `No employee profile exists for this account` | The user has no Employee record; create people through sign-up, HR's *Add person* (`POST /api/employees`) or the seed script rather than inserting users by hand |
+| 404 `Route not found: POST /api/auth/register` | Self-registration was removed in Phase 19. Companies sign up at `/signup` (`POST /api/organisations/signup`); HR adds employees |
 | `Seed failed: … is not set` | Add the `SEED_*` variables to `server/.env` |
+| `Seed failed: Say which organisation…` | Add `--organisation "Company name"` (or set `SEED_ORGANISATION`) |
+| `Seed failed: … already belongs to another organisation` | Emails are unique across StaffSync; use a different `--hr-email` |
 | 400 `Unknown field` | The request body has a field that endpoint does not accept; check the field name or remove it |
 | 409 `Reassign this manager's … team member(s)…` | Move their reports to another manager with `PUT /api/employees/:id { "managerId": … }` first |
 | `TIMEZONE "…" is not a valid IANA time zone` | Use a name such as `Asia/Kolkata` or `Europe/London` in `server/.env` |
@@ -1162,12 +1285,17 @@ Pages get a strict Content-Security-Policy: scripts only from the site itself, n
 | `Port 5000 is already in use` | Another process (or a second server terminal) is using the port — stop it or change `PORT` |
 | "Can't reach StaffSync" screen, or "Unable to reach the server" | Backend not running, or `VITE_API_URL` wrong — restart Vite after editing `client/.env` |
 | Signed out unexpectedly with "This account has been deactivated" or "session has expired" | The API rejected the token; log in again (or ask HR to reactivate the account) |
+| 401 `Invalid token` straight after upgrading to Phase 19 | Tokens from before Phase 19 have no scope; log in again once |
+| 403 `Your organisation's StaffSync account is suspended` | The organisation has been suspended; its users cannot sign in until it is reactivated |
+| A platform admin token gets 401 on `/api/employees` (or an HR token on `/api/platform/…`) | Each API accepts only its own kind of token — see *Platform admins* |
+| `… ran without an organisation context` (500) | New code queried an organisation-owned model outside a signed-in request; run it inside the request, or wrap deliberate platform-level code in `runAsPlatform()` |
 | `VITE_API_URL is not set` error in the browser | `client/.env` missing |
 | Works in Postman, fails in browser | CORS — see above |
 
 ## Known limitations
 
 - Password reset needs an SMTP account in `.env` before it can email anyone outside development.
+- Platform admins have only a login and a read-only list of organisations. Suspending an organisation and the full platform console come in Phase 21.
 - Absences are calculated in reports, not stored as records. There is no public-holiday calendar yet, so holidays count as absences.
 - Reports cover active employees only; someone deactivated part-way through a period drops out of that period's report.
 - Check-in and check-out must fall on the same calendar day.

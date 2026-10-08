@@ -111,14 +111,76 @@
       "name": "01 Auth",
       "item": [
         {
-          "name": "Register employee",
+          "name": "Setup: log in as HR",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('organisation returned', () => pm.expect(body.data.organisation.name).to.be.a('string').and.not.empty);",
+                  "pm.environment.set('hrToken', body.data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{hrEmail}}\",\n  \"password\": \"{{hrPassword}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Self-registration has been removed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('no route', () => pm.expect(pm.response.json().message).to.match(/^Route not found/));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Self\",\n  \"email\": \"postman+self@staffsync.test\",\n  \"password\": \"Passw0rd123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "HR creates employee for auth tests",
           "event": [
             {
               "listen": "prerequest",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "// Fresh account each run so the collection can be re-run.",
+                  "// Fresh account each run so the collection can be re-run. Employees are added by HR; they cannot register.",
                   "pm.collectionVariables.set('regEmail', 'postman+' + Date.now() + '@staffsync.test');",
                   "pm.collectionVariables.set('regPassword', 'Passw0rd123');"
                 ]
@@ -131,13 +193,10 @@
                 "exec": [
                   "const body = pm.response.json();",
                   "pm.test('Status is 201', () => pm.response.to.have.status(201));",
-                  "pm.test('success is true', () => pm.expect(body.success).to.eql(true));",
-                  "pm.test('token returned', () => pm.expect(body.data.token).to.be.a('string').and.not.empty);",
-                  "pm.test('role is employee', () => pm.expect(body.data.user.role).to.eql('employee'));",
-                  "pm.test('employee profile created', () => { pm.expect(body.data.employee.employeeId).to.match(/^EMP\\d{4,}$/); pm.expect(body.data.employee.userId).to.eql(body.data.user._id); });",
+                  "pm.test('role is employee', () => pm.expect(body.data.userId.role).to.eql('employee'));",
+                  "pm.test('employee code assigned', () => pm.expect(body.data.employeeId).to.match(/^EMP\\d{4,}$/));",
                   "pm.test('password never returned', () => pm.expect(JSON.stringify(body)).to.not.include('password'));",
-                  "pm.environment.set('employeeToken', body.data.token);",
-                  "pm.environment.set('regEmployeeId', body.data.employee._id);"
+                  "pm.environment.set('regEmployeeId', body.data._id);"
                 ]
               }
             }
@@ -148,24 +207,29 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
               }
             ],
-            "url": "{{baseUrl}}/auth/register",
+            "url": "{{baseUrl}}/employees",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Postman Employee\",\n  \"email\": \"{{regEmail}}\",\n  \"password\": \"{{regPassword}}\"\n}"
+              "raw": "{\n  \"name\": \"Postman Employee\",\n  \"email\": \"{{regEmail}}\",\n  \"password\": \"{{regPassword}}\",\n  \"department\": \"Unassigned\",\n  \"designation\": \"Unassigned\"\n}"
             }
           }
         },
         {
-          "name": "Register ignores role field",
+          "name": "Sign up a second organisation",
           "event": [
             {
               "listen": "prerequest",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.collectionVariables.set('roleEmail', 'postman+role' + Date.now() + '@staffsync.test');"
+                  "pm.collectionVariables.set('otherOrgEmail', 'postman+org' + Date.now() + '@staffsync.test');",
+                  "pm.collectionVariables.set('otherOrgName', 'Postman Org ' + Date.now());"
                 ]
               }
             },
@@ -176,7 +240,11 @@
                 "exec": [
                   "const body = pm.response.json();",
                   "pm.test('Status is 201', () => pm.response.to.have.status(201));",
-                  "pm.test('role forced to employee', () => pm.expect(body.data.user.role).to.eql('employee'));"
+                  "pm.test('signer-up is HR of the new organisation', () => pm.expect(body.data.user.role).to.eql('hr'));",
+                  "pm.test('organisation created', () => pm.expect(body.data.organisation.name).to.eql(pm.collectionVariables.get('otherOrgName')));",
+                  "pm.test('numbering starts again', () => pm.expect(body.data.employee.employeeId).to.eql('EMP0001'));",
+                  "pm.test('password never returned', () => pm.expect(JSON.stringify(body)).to.not.include('password'));",
+                  "pm.environment.set('otherOrgHrToken', body.data.token);"
                 ]
               }
             }
@@ -189,15 +257,47 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/auth/register",
+            "url": "{{baseUrl}}/organisations/signup",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Would-be HR\",\n  \"email\": \"{{roleEmail}}\",\n  \"password\": \"Passw0rd123\",\n  \"role\": \"hr\"\n}"
+              "raw": "{\n  \"companyName\": \"{{otherOrgName}}\",\n  \"name\": \"Other HR\",\n  \"email\": \"{{otherOrgEmail}}\",\n  \"password\": \"Passw0rd123\"\n}"
             }
           }
         },
         {
-          "name": "Register duplicate email returns 409",
+          "name": "Sign-up refuses a role field",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Validation failed\"));",
+                  "pm.test('role is an unknown field', () => pm.expect(pm.response.json().errors).to.deep.include({ field: 'role', message: 'Unknown field' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/organisations/signup",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyName\": \"Sneaky Co\",\n  \"name\": \"S\",\n  \"email\": \"postman+sneaky@staffsync.test\",\n  \"password\": \"Passw0rd123\",\n  \"role\": \"employee\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Sign-up with an email used in another organisation returns 409",
           "event": [
             {
               "listen": "test",
@@ -220,15 +320,15 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/auth/register",
+            "url": "{{baseUrl}}/organisations/signup",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Duplicate\",\n  \"email\": \"{{regEmail}}\",\n  \"password\": \"Passw0rd123\"\n}"
+              "raw": "{\n  \"companyName\": \"Duplicate Co\",\n  \"name\": \"Duplicate\",\n  \"email\": \"{{regEmail}}\",\n  \"password\": \"Passw0rd123\"\n}"
             }
           }
         },
         {
-          "name": "Register missing fields returns 400",
+          "name": "Sign-up missing fields returns 400",
           "event": [
             {
               "listen": "test",
@@ -239,9 +339,7 @@
                   "pm.test('Status is 400', () => pm.response.to.have.status(400));",
                   "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
                   "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Validation failed\"));",
-                  "pm.test('name error reported', () => pm.expect(body.errors.map((e) => e.field)).to.include('name'));",
-                  "pm.test('email error reported', () => pm.expect(body.errors.map((e) => e.field)).to.include('email'));",
-                  "pm.test('password error reported', () => pm.expect(body.errors.map((e) => e.field)).to.include('password'));"
+                  "['companyName', 'name', 'email', 'password'].forEach((f) => pm.test(f + ' error reported', () => pm.expect(pm.response.json().errors.map((e) => e.field)).to.include(f)));"
                 ]
               }
             }
@@ -254,7 +352,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/auth/register",
+            "url": "{{baseUrl}}/organisations/signup",
             "body": {
               "mode": "raw",
               "raw": "{}"
@@ -262,7 +360,7 @@
           }
         },
         {
-          "name": "Register weak password returns 400",
+          "name": "Sign-up weak password returns 400",
           "event": [
             {
               "listen": "test",
@@ -273,7 +371,7 @@
                   "pm.test('Status is 400', () => pm.response.to.have.status(400));",
                   "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
                   "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Validation failed\"));",
-                  "pm.test('password error reported', () => pm.expect(body.errors.map((e) => e.field)).to.include('password'));",
+                  "pm.test('password error reported', () => pm.expect(pm.response.json().errors.map((e) => e.field)).to.include('password'));",
                   "pm.test('submitted password not echoed', () => pm.expect(pm.response.text()).to.not.include('\"short\"'));"
                 ]
               }
@@ -287,11 +385,65 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/auth/register",
+            "url": "{{baseUrl}}/organisations/signup",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Weak\",\n  \"email\": \"weak@staffsync.test\",\n  \"password\": \"short\"\n}"
+              "raw": "{\n  \"companyName\": \"Weak Co\",\n  \"name\": \"Weak\",\n  \"email\": \"weak@staffsync.test\",\n  \"password\": \"short\"\n}"
             }
+          }
+        },
+        {
+          "name": "Other organisation cannot read this employee (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Employee not found\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{otherOrgHrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/{{regEmployeeId}}"
+          }
+        },
+        {
+          "name": "Other organisation lists only its own people",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('only its own HR', () => pm.expect(body.data.total).to.eql(1));",
+                  "pm.test('nobody from the demo organisation', () => pm.expect(JSON.stringify(body)).to.not.include(pm.environment.get('hrEmail')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{otherOrgHrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/employees"
           }
         },
         {
@@ -481,7 +633,8 @@
                   "pm.test('Status is 200', () => pm.response.to.have.status(200));",
                   "pm.test('correct user', () => pm.expect(body.data.user.email).to.eql(pm.collectionVariables.get('regEmail')));",
                   "pm.test('employee profile included', () => pm.expect(body.data.employee.department).to.eql('Unassigned'));",
-                  "pm.test('password never returned', () => pm.expect(JSON.stringify(body)).to.not.include('password'));"
+                  "pm.test('password never returned', () => pm.expect(JSON.stringify(body)).to.not.include('password'));",
+                  "pm.test('organisation returned', () => pm.expect(pm.response.json().data.organisation.name).to.be.a('string').and.not.empty);"
                 ]
               }
             }
@@ -495,6 +648,130 @@
               }
             ],
             "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "Get my organisation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('name and settings', () => { pm.expect(body.data.name).to.be.a('string'); pm.expect(body.data.settings.workingDays).to.be.an('array'); });",
+                  "pm.test('no platform fields', () => pm.expect(body.data).to.not.have.property('status'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/organisations/me"
+          }
+        },
+        {
+          "name": "Employee cannot change organisation settings",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"You do not have permission to perform this action\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{employeeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/organisations/me",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Hijacked\"\n}"
+            }
+          }
+        },
+        {
+          "name": "HR cannot change organisation status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));",
+                  "pm.test('message is correct', () => pm.expect(body.message).to.eql(\"Validation failed\"));",
+                  "pm.test('status is an unknown field', () => pm.expect(pm.response.json().errors.map((e) => e.field)).to.include('status'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/organisations/me",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"suspended\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Organisation token cannot use the platform API",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('success is false', () => pm.expect(body.success).to.eql(false));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hrToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/platform/organisations"
           }
         },
         {

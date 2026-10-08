@@ -86,12 +86,12 @@ const createLimiters = () => {
       skipSuccessfulRequests: true,
       keyGenerator: (req) => `${ipKeyGenerator(req.ip)}|${String(req.body?.email || '').trim().toLowerCase()}`,
     }),
-    // New accounts per address.
-    register: limiter({
+    // New organisations signed up per address.
+    signup: limiter({
       windowMinutes: 60,
       // Strict in production; looser elsewhere so repeated test runs are not blocked.
-      limit: numberFromEnv('REGISTER_MAX_PER_HOUR', process.env.NODE_ENV === 'production' ? 10 : 100),
-      message: 'Too many accounts created from this address.',
+      limit: numberFromEnv('SIGNUP_MAX_PER_HOUR', process.env.NODE_ENV === 'production' ? 10 : 100),
+      message: 'Too many organisations created from this address.',
     }),
     // Reset emails per address and email, so the feature cannot be used to flood an inbox.
     // Every request counts, because the response is the same whether or not the account exists.

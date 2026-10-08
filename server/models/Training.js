@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantScoped = require('./plugins/tenantScoped');
 
 const trainingSchema = new mongoose.Schema(
   {
@@ -60,7 +61,9 @@ const trainingSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-trainingSchema.index({ startDate: 1 });
+trainingSchema.plugin(tenantScoped);
+
+trainingSchema.index({ organisationId: 1, startDate: 1 });
 trainingSchema.index({ participants: 1 });
 
 module.exports = mongoose.model('Training', trainingSchema);

@@ -27,6 +27,7 @@ const pages = {
   announcements: lazy(() => import('../pages/announcements/AnnouncementsPage')),
   reports: lazy(() => import('../pages/reports/ReportsPage')),
   notifications: lazy(() => import('../pages/notifications/NotificationsPage')),
+  companySettings: lazy(() => import('../pages/organisation/OrganisationSettingsPage')),
 };
 
 export default pages;

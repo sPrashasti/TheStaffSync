@@ -1,5 +1,6 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import * as authService from '../services/authService';
+import * as organisationService from '../services/organisationService';
 import { tokenStorage } from '../utils/storage';
 
 // status: 'checking' (a saved token is being verified), 'authenticated', 'anonymous', or
@@ -13,19 +14,20 @@ export const login = createAsyncThunk('auth/login', async (credentials, { reject
   try {
     const { token } = await authService.login(credentials);
     tokenStorage.set(token);
-    const { user, employee } = await authService.getMe();
-    return { token, user, employee };
+    const { user, employee, organisation } = await authService.getMe();
+    return { token, user, employee, organisation };
   } catch (err) {
     tokenStorage.clear();
     return rejectWithValue(toError(err));
   }
 });
 
-export const register = createAsyncThunk('auth/register', async (details, { rejectWithValue }) => {
+// A new company signs up; the person signing up becomes its first HR user.
+export const signup = createAsyncThunk('auth/signup', async (details, { rejectWithValue }) => {
   try {
-    const { token, user, employee } = await authService.register(details);
+    const { token, user, employee, organisation } = await organisationService.signup(details);
     tokenStorage.set(token);
-    return { token, user, employee };
+    return { token, user, employee, organisation };
   } catch (err) {
     return rejectWithValue(toError(err));
   }
@@ -47,6 +49,7 @@ const signedOut = (state, notice = '') => {
   state.token = null;
   state.user = null;
   state.employee = null;
+  state.organisation = null;
   state.status = 'anonymous';
   state.notice = notice;
 };
@@ -57,6 +60,8 @@ const authSlice = createSlice({
     token: savedToken,
     user: null,
     employee: null,
+    // The user's company: name and settings (time zone, working days).
+    organisation: null,
     status: savedToken ? 'checking' : 'anonymous',
     // Shown on the login page, e.g. after a session expires.
     notice: '',
@@ -72,18 +77,23 @@ const authSlice = createSlice({
       tokenStorage.set(action.payload);
       state.token = action.payload;
     },
+    // After HR changes the company name or settings.
+    organisationUpdated: (state, action) => {
+      state.organisation = action.payload;
+    },
   },
   extraReducers: (builder) => {
     const signedIn = (state, { payload }) => {
       if (payload.token) state.token = payload.token;
       state.user = payload.user;
       state.employee = payload.employee;
+      state.organisation = payload.organisation;
       state.status = 'authenticated';
       state.notice = '';
     };
     builder
       .addCase(login.fulfilled, signedIn)
-      .addCase(register.fulfilled, signedIn)
+      .addCase(signup.fulfilled, signedIn)
       .addCase(loadSession.fulfilled, signedIn)
       .addCase(loadSession.pending, (state) => {
         if (state.status === 'unavailable') state.status = 'checking';
@@ -93,6 +103,9 @@ const authSlice = createSlice({
         // A rejected token means log in again; a network problem keeps the token so a retry can work.
         if (payload?.httpStatus === 401 || payload?.httpStatus === 404) {
           signedOut(state, 'Please log in to continue.');
+        } else if (payload?.httpStatus === 403) {
+          // E.g. the organisation's account is suspended: say why, rather than retrying forever.
+          signedOut(state, payload.message);
         } else {
           state.status = 'unavailable';
           state.notice = payload?.message || 'Unable to reach the server.';
@@ -101,9 +114,10 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, sessionExpired, clearNotice, tokenReplaced } = authSlice.actions;
+export const { logout, sessionExpired, clearNotice, tokenReplaced, organisationUpdated } = authSlice.actions;
 export default authSlice.reducer;
 
 export const selectAuth = (state) => state.auth;
 export const selectUser = (state) => state.auth.user;
 export const selectRole = (state) => state.auth.user?.role;
+export const selectOrganisation = (state) => state.auth.organisation;

@@ -21,3 +21,7 @@ npm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Database exports and local migration plans (contain personal data)
+server/backups/
+*.local.json

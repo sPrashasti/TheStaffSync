@@ -34,8 +34,8 @@ const start = async () => {
   const server = app.listen(PORT, () => {
     console.log(`StaffSync API listening on http://localhost:${PORT} (${process.env.NODE_ENV || 'development'})`);
     console.log(`CORS allowed origins: ${allowedOrigins.join(', ') || '(none configured)'}`);
-    console.log(`Default time zone: ${getTimeZone()}`);
-    console.log(`Working days: ${getWorkingDayNames().join(', ')}`);
+    console.log(`Default time zone for new organisations: ${getTimeZone()}`);
+    console.log(`Default working days: ${getWorkingDayNames().join(', ')}`);
     if (process.env.NODE_ENV !== 'production') {
       console.log(`Mounted routes: ${mountedPaths.join(', ')}`);
     }

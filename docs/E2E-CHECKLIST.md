@@ -101,9 +101,21 @@ Tick each box as you go. If something does not match, note the step number, the 
 | F6 | Any | My profile → **Change password** | "Password changed. Other devices have been signed out."; a second browser signed in as the same person is sent to the login page on its next action |
 | F7 | Signed out | Enter a wrong password 6 times for one account | From the 6th try: "Too many failed login attempts. Try again in 15 minutes." Other accounts still log in |
 
+## G. Organisations (Phase 19)
+
+| # | As | Do | Expect |
+|---|---|---|---|
+| G1 | Signed out | Login page → **Set up your organisation**; enter a company name, your name, an unused email and a password | You land on the HR dashboard; the menu shows the new company name under the logo |
+| G2 | New HR | Employees | Only yourself (EMP0001); nothing from DemoTech Solutions |
+| G3 | New HR | **Company settings** → change the time zone and untick Friday → Save | "Company settings saved"; the name in the menu updates if you changed it |
+| G4 | DemoTech HR (other browser) | Company settings | DemoTech's own settings, unchanged by G3 |
+| G5 | Signed out | Open `/register` | Redirected to the sign-up page |
+| G6 | Signed out | Sign up again with the G1 email | "An account with this email already exists" |
+| G7 | Manager or employee | Open `/hr/company` | Not available to that role |
+
 ## When you finish
 
 - [ ] All of A passed (this is the acceptance test for the leave workflow)
-- [ ] B–E passed, or the failures are written down with step numbers
+- [ ] B–E and G passed, or the failures are written down with step numbers
 
 Remove the people you created with HR → Employees (deactivate), and run `npm run clean:test-data -- --yes` in `server` if Postman runs have added test accounts.

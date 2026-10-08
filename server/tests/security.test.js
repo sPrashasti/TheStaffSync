@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 
 // Low limits for this file only (each test file runs in its own process).
 process.env.LOGIN_MAX_FAILURES = '3';
-process.env.REGISTER_MAX_PER_HOUR = '3';
+process.env.SIGNUP_MAX_PER_HOUR = '3';
 
 const { setup } = require('./helpers');
 
@@ -58,22 +58,20 @@ describe('security hardening', () => {
     assert.equal((await ctx.call('POST', '/leaves', employee.token, { leaveType: { $gt: '' }, startDate: '2030-01-01', endDate: '2030-01-01', reason: 'x' })).status, 400);
   });
 
-  it('ignores privilege fields on self-registration', async () => {
-    const x = await ctx.call('POST', '/auth/register', null, {
-      name: 'Sneaky', email: 'sneaky@t.test', password: 'Passw0rd123', role: 'hr', isActive: false, passwordChangedAt: '2000-01-01',
+  it('refuses privilege fields on organisation sign-up', async () => {
+    const x = await ctx.call('POST', '/organisations/signup', null, {
+      companyName: 'Sneaky Co', name: 'Sneaky', email: 'sneaky@t.test', password: 'Passw0rd123', role: 'employee', isActive: false, passwordChangedAt: '2000-01-01',
     });
-    assert.equal(x.status, 201);
-    const stored = await ctx.models.User.findOne({ email: 'sneaky@t.test' }).select('+passwordChangedAt');
-    assert.equal(stored.role, 'employee');
-    assert.equal(stored.isActive, true);
-    assert.equal(stored.passwordChangedAt, undefined);
+    assert.equal(x.status, 400);
+    assert.deepEqual(x.body.errors.map((e) => e.field).sort(), ['isActive', 'passwordChangedAt', 'role']);
+    assert.equal(await ctx.asPlatform(() => ctx.models.User.exists({ email: 'sneaky@t.test' })), null);
   });
 
   it('limits sign-ups per address', async () => {
-    // One registration already happened above; the limit for this file is 3 per hour.
+    // One sign-up attempt already happened above; the limit for this file is 3 per hour.
     const results = [];
     for (const n of [1, 2, 3]) {
-      results.push((await ctx.call('POST', '/auth/register', null, { name: 'R', email: `r${n}@t.test`, password: 'Passw0rd123' })).status);
+      results.push((await ctx.call('POST', '/organisations/signup', null, { companyName: `Co ${n}`, name: 'R', email: `r${n}@t.test`, password: 'Passw0rd123' })).status);
     }
     assert.deepEqual(results, [201, 201, 429]);
   });

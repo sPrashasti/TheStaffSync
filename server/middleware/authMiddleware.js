@@ -1,12 +1,16 @@
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Employee = require('../models/Employee');
+const Organisation = require('../models/Organisation');
+const PlatformAdmin = require('../models/PlatformAdmin');
 const AppError = require('../utils/AppError');
-const { verifyToken } = require('../utils/token');
+const { SCOPES, verifyToken } = require('../utils/token');
+const { runAsPlatform, runInOrganisation } = require('../utils/tenantContext');
 
-// Requires a valid "Authorization: Bearer <token>" header and an active user.
-// On success req.user holds the current User document (without the password).
-const protect = async (req, res, next) => {
+// Reads and checks the bearer token. Returns its payload, or throws 401.
+// A token of the wrong kind is rejected as invalid, exactly like a forged one, so an
+// organisation user's token never works on the platform API and vice versa.
+const readToken = (req, scope) => {
   const [scheme, token] = (req.headers.authorization || '').split(' ');
   if (scheme !== 'Bearer' || !token) {
     throw new AppError('Not authenticated. Please log in.', 401);
@@ -21,18 +25,36 @@ const protect = async (req, res, next) => {
       : 'Invalid token. Please log in again.';
     throw new AppError(message, 401);
   }
-  if (!mongoose.isValidObjectId(payload.id)) {
+  if (payload.scope !== scope || !mongoose.isValidObjectId(payload.id)) {
     throw new AppError('Invalid token. Please log in again.', 401);
   }
+  return payload;
+};
 
-  // The user and their employee record in one round trip (this runs on every request).
+// Requires a valid organisation user's token, an active user and an active organisation.
+// On success req.user holds the current User document (without the password), req.organisation
+// their Organisation, and the rest of the request runs inside that organisation: every
+// organisation-owned query is limited to it (see models/plugins/tenantScoped).
+const protect = async (req, res, next) => {
+  const payload = readToken(req, SCOPES.org);
+
+  // The user, their employee record and organisation in one round trip (this runs on every
+  // request). Platform-level because the organisation is not known until the user is loaded.
   // Secrets are left out here, so they never reach a request handler.
-  const [found] = await User.aggregate([
+  const [found] = await runAsPlatform(() => User.aggregate([
     { $match: { _id: new mongoose.Types.ObjectId(payload.id) } },
-    { $lookup: { from: Employee.collection.collectionName, localField: '_id', foreignField: 'userId', as: 'employee' } },
+    {
+      $lookup: {
+        from: Employee.collection.collectionName,
+        let: { userId: '$_id', organisationId: '$organisationId' },
+        pipeline: [{ $match: { $expr: { $and: [{ $eq: ['$userId', '$$userId'] }, { $eq: ['$organisationId', '$$organisationId'] }] } } }],
+        as: 'employee',
+      },
+    },
+    { $lookup: { from: Organisation.collection.collectionName, localField: 'organisationId', foreignField: '_id', as: 'organisation' } },
     { $project: { password: 0, passwordResetTokenHash: 0, passwordResetExpires: 0 } },
-  ]);
-  const user = found && User.hydrate({ ...found, employee: undefined });
+  ]));
+  const user = found && User.hydrate({ ...found, employee: undefined, organisation: undefined });
   if (!user) {
     throw new AppError('The account for this token no longer exists.', 401);
   }
@@ -42,11 +64,42 @@ const protect = async (req, res, next) => {
   if (user.changedPasswordAfter(payload.iat)) {
     throw new AppError('Your password was changed. Please log in again.', 401);
   }
+  const organisation = found.organisation[0] && Organisation.hydrate(found.organisation[0]);
+  if (!organisation) {
+    // A user without an organisation is a data error; never let it see anything.
+    throw new AppError('This account is not part of an organisation. Contact support.', 403);
+  }
+  if (organisation.status !== 'active') {
+    throw new AppError('Your organisation\'s StaffSync account is suspended. Contact StaffSync support.', 403);
+  }
 
   req.user = user;
+  req.organisation = organisation;
   // Kept for loadEmployee, so routes that need the profile do not query again.
   req.employeeLookup = found.employee[0] ? Employee.hydrate(found.employee[0]) : null;
-  next();
+  // The organisation comes from the database record, never from the token or the request.
+  return runInOrganisation(organisation, next);
+};
+
+// Requires a valid platform admin token. Platform admins are a separate kind of account
+// (models/PlatformAdmin), not an organisation role: they never pass protect(), and organisation
+// users, HR included, never pass this. The request runs at platform level (all organisations).
+const protectPlatform = async (req, res, next) => {
+  const payload = readToken(req, SCOPES.platform);
+
+  const admin = await PlatformAdmin.findById(payload.id).select('+passwordChangedAt');
+  if (!admin) {
+    throw new AppError('The account for this token no longer exists.', 401);
+  }
+  if (!admin.isActive) {
+    throw new AppError('This account has been deactivated.', 401);
+  }
+  if (admin.changedPasswordAfter(payload.iat)) {
+    throw new AppError('Your password was changed. Please log in again.', 401);
+  }
+
+  req.platformAdmin = admin;
+  return runAsPlatform(next);
 };
 
 // Allows the request only if the logged-in user has one of the given roles. Use after protect:
@@ -84,4 +137,4 @@ const loadEmployee = async (req, res, next) => {
   next();
 };
 
-module.exports = { protect, authorize, loadEmployee };
+module.exports = { protect, protectPlatform, authorize, loadEmployee };

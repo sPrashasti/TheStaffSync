@@ -1,10 +1,15 @@
 // "Today" for attendance and leave is a calendar day in a time zone, worked out on the server,
 // so a client's clock can never move a record to another day. Each employee uses their own
-// time zone if HR has set one, otherwise the company default (TIMEZONE, IST if unset).
+// time zone if HR has set one, otherwise their organisation's default.
+const { currentOrganisation } = require('./tenantContext');
+
 const DEFAULT_TIMEZONE = 'Asia/Kolkata';
 
-// The company default time zone.
-const getTimeZone = () => process.env.TIMEZONE || DEFAULT_TIMEZONE;
+// The default time zone for new organisations, and for code running outside any organisation.
+const getPlatformTimeZone = () => process.env.TIMEZONE || DEFAULT_TIMEZONE;
+
+// The current organisation's time zone (set by its HR), else the platform default.
+const getTimeZone = () => currentOrganisation()?.settings?.timeZone || getPlatformTimeZone();
 
 // True for an IANA time zone name the runtime knows, e.g. Asia/Kolkata or Europe/London.
 const isValidTimeZone = (value) => {
@@ -19,8 +24,8 @@ const isValidTimeZone = (value) => {
 
 // Called once at startup so a misspelt TIMEZONE stops the server instead of failing on first check-in.
 const assertTimeZone = () => {
-  if (!isValidTimeZone(getTimeZone())) {
-    throw new Error(`TIMEZONE "${getTimeZone()}" is not a valid IANA time zone, e.g. Asia/Kolkata.`);
+  if (!isValidTimeZone(getPlatformTimeZone())) {
+    throw new Error(`TIMEZONE "${getPlatformTimeZone()}" is not a valid IANA time zone, e.g. Asia/Kolkata.`);
   }
 };
 
@@ -66,7 +71,13 @@ const daysBetween = (from, to) => Math.max(0, Math.round((dateStringToDate(to) -
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DEFAULT_WORKING_DAYS = 'Mon,Tue,Wed,Thu,Fri';
 
-const parseWorkingDays = (value = process.env.WORKING_DAYS || DEFAULT_WORKING_DAYS) => {
+// The platform default working week, used for new organisations and outside any organisation.
+const getPlatformWorkingDays = () => process.env.WORKING_DAYS || DEFAULT_WORKING_DAYS;
+
+// The current organisation's working week, else the platform default.
+const currentWorkingDays = () => currentOrganisation()?.settings?.workingDays?.join(',') || getPlatformWorkingDays();
+
+const parseWorkingDays = (value = currentWorkingDays()) => {
   const names = value.split(',').map((d) => d.trim()).filter(Boolean);
   const unknown = names.filter((d) => !DAY_NAMES.includes(d));
   if (names.length === 0 || unknown.length > 0) {
@@ -76,7 +87,7 @@ const parseWorkingDays = (value = process.env.WORKING_DAYS || DEFAULT_WORKING_DA
 };
 
 // Called once at startup so a typo in WORKING_DAYS stops the server.
-const assertWorkingDays = () => parseWorkingDays();
+const assertWorkingDays = () => parseWorkingDays(getPlatformWorkingDays());
 
 // Names of the configured working days, e.g. ['Mon', …, 'Fri'].
 const getWorkingDayNames = () => [...parseWorkingDays()].sort().map((i) => DAY_NAMES[i]);
@@ -87,6 +98,8 @@ const isWorkingDay = (dateString, workingDays = parseWorkingDays()) =>
 
 module.exports = {
   getTimeZone,
+  getPlatformTimeZone,
+  getPlatformWorkingDays,
   isValidTimeZone,
   assertTimeZone,
   employeeTimeZone,

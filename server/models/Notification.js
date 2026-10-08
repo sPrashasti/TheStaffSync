@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantScoped = require('./plugins/tenantScoped');
 
 const NOTIFICATION_TYPES = ['leave', 'announcement', 'training', 'system'];
 
@@ -43,6 +44,8 @@ const notificationSchema = new mongoose.Schema(
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );
+
+notificationSchema.plugin(tenantScoped);
 
 notificationSchema.index({ recipient: 1, isRead: 1, createdAt: -1 });
 

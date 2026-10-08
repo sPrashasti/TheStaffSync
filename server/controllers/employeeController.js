@@ -148,7 +148,7 @@ const getEmployee = async (req, res) => {
 const createEmployee = async (req, res) => {
   const { name, email, password, role = 'employee', managerId, ...profile } = req.body;
 
-  if (await User.exists({ email })) {
+  if (await User.emailInUse(email)) {
     throw new AppError('An account with this email already exists', 409);
   }
   if (managerId) await assertValidManager(managerId, null);
@@ -187,7 +187,7 @@ const updateEmployee = async (req, res) => {
       deactivating: changes.isActive === false && user.isActive,
     });
     if (changes.managerId) await assertValidManager(changes.managerId, employee._id);
-    if (changes.email && changes.email !== user.email && (await User.exists({ email: changes.email }))) {
+    if (changes.email && changes.email !== user.email && (await User.emailInUse(changes.email))) {
       throw new AppError('An account with this email already exists', 409);
     }
   }

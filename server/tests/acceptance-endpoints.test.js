@@ -11,7 +11,10 @@ const ANY_ID = '64b7f0000000000000000000';
 // [method, path, allowed role, a role that must get 403 (or null), body]
 const PLANNED = [
   ['GET', '/health', null, null],
-  ['POST', '/auth/register', null, null, { name: 'X', email: 'new@t.test', password: 'Passw0rd123' }],
+  // Phase 19: companies sign up as organisations; employee self-registration was removed.
+  ['POST', '/organisations/signup', null, null, { companyName: 'New Co', name: 'X', email: 'new@t.test', password: 'Passw0rd123' }],
+  ['GET', '/organisations/me', 'employee', null],
+  ['PUT', '/organisations/me', 'hr', 'manager', { name: 'Test Organisation' }],
   ['POST', '/auth/login', null, null, { email: 'employee@t.test', password: 'Passw0rd123' }],
   ['GET', '/auth/me', 'employee', null],
   ['GET', '/employees', 'hr', 'manager'],
@@ -69,7 +72,7 @@ describe('acceptance: every planned endpoint is implemented, mounted and role-ch
   after(async () => { await ctx.teardown(); });
 
   it(`covers all ${PLANNED.length} endpoints from the requirements`, () => {
-    assert.equal(PLANNED.length, 43);
+    assert.equal(PLANNED.length, 45);
   });
 
   for (const [method, path, allowed, denied, body] of PLANNED) {

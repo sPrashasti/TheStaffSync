@@ -29,9 +29,10 @@ const mongoose = require('mongoose');
 const { connectDB } = require('../config/db');
 const models = require('../models');
 const { signToken } = require('../utils/token');
+const { enterForTests } = require('../utils/tenantContext');
 const { toDateString, addDays, getTimeZone } = require('../utils/dates');
 
-const { User, Employee, Attendance, Leave, Notification, Training, Announcement } = models;
+const { Organisation, User, Employee, Attendance, Leave, Notification, Training, Announcement } = models;
 const args = process.argv.slice(2);
 const pick = (list, i) => list[i % list.length];
 
@@ -42,8 +43,6 @@ const wipe = async () => {
 
 const seed = async () => {
   const started = Date.now();
-  await wipe();
-  await Promise.all(Object.values(models).map((m) => m.syncIndexes()));
 
   // One hash for everyone: hashing 500 passwords at cost 12 would take minutes.
   const password = await bcrypt.hash('Passw0rd123', 12);
@@ -176,7 +175,17 @@ const run = async () => {
   await connectDB();
   console.log = log;
 
-  if (!args.includes('--reuse')) await seed();
+  const reuse = args.includes('--reuse');
+  if (!reuse) {
+    await wipe();
+    await Promise.all(Object.values(models).map((m) => m.syncIndexes()));
+  }
+  // Everything below (seeding and the explain() checks) runs inside one benchmark organisation,
+  // so queries are measured with the organisation filter the API adds.
+  const organisation = (await Organisation.findOne({ slug: 'benchmark' }))
+    || (await Organisation.create({ name: 'Benchmark', slug: 'benchmark' }));
+  enterForTests({ organisationId: organisation._id, organisation });
+  if (!reuse) await seed();
 
   const app = require('../app');
   const server = app.listen(0);

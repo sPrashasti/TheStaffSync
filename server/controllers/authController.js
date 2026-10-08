@@ -1,50 +1,37 @@
 const bcrypt = require('bcryptjs');
-const mongoose = require('mongoose');
 const User = require('../models/User');
 const Employee = require('../models/Employee');
+const Organisation = require('../models/Organisation');
 const AppError = require('../utils/AppError');
-const { sendSuccess, sendCreated } = require('../utils/apiResponse');
+const { sendSuccess } = require('../utils/apiResponse');
 const { signToken } = require('../utils/token');
 const { isMailConfigured } = require('../utils/mailer');
+const { runAsPlatform } = require('../utils/tenantContext');
 const passwordReset = require('../services/passwordResetService');
-
-// Department and designation until HR fills them in.
-const UNASSIGNED = 'Unassigned';
 
 // Compared against when the email is unknown, so a missing account takes as long to
 // reject as a wrong password and response times do not reveal which emails exist.
 const DUMMY_HASH = bcrypt.hashSync('dummy-password-for-timing', 12);
 
-// POST /api/auth/register — public. Always creates an employee; any `role` in the body is ignored.
-const register = async (req, res) => {
-  const { name, email, password } = req.body;
+// What the app shows about the user's organisation. Settings are included for every role, as
+// they decide dates on screen.
+const organisationSummary = (organisation) => ({
+  _id: organisation._id,
+  name: organisation.name,
+  slug: organisation.slug,
+  settings: organisation.settings,
+});
 
-  if (await User.exists({ email })) {
-    throw new AppError('An account with this email already exists', 409);
-  }
-
-  // User and Employee are saved together or not at all.
-  let user;
-  let employee;
-  await mongoose.connection.transaction(async (session) => {
-    [user] = await User.create([{ name, email, password, role: 'employee' }], { session });
-    [employee] = await Employee.create(
-      [{ userId: user._id, department: UNASSIGNED, designation: UNASSIGNED }],
-      { session }
-    );
-  });
-
-  sendCreated(res, {
-    message: 'Registration successful',
-    data: { token: signToken(user._id), user, employee },
-  });
-};
+// There is no POST /api/auth/register: employees cannot sign themselves up. New organisations
+// sign up at POST /api/organisations/signup, and HR adds their employees.
 
 // POST /api/auth/login — public.
 const login = async (req, res) => {
   const { email, password } = req.body;
 
-  const user = await User.findOne({ email }).select('+password');
+  // Platform-level: email addresses are unique across organisations, and the organisation is not
+  // known until the user is found.
+  const user = await runAsPlatform(() => User.findOne({ email }).select('+password'));
   const passwordMatches = user
     ? await user.comparePassword(password)
     : await bcrypt.compare(password, DUMMY_HASH);
@@ -56,10 +43,17 @@ const login = async (req, res) => {
   if (!user.isActive) {
     throw new AppError('This account has been deactivated. Contact HR.', 401);
   }
+  const organisation = await Organisation.findById(user.organisationId);
+  if (!organisation) {
+    throw new AppError('This account is not part of an organisation. Contact support.', 403);
+  }
+  if (organisation.status !== 'active') {
+    throw new AppError('Your organisation\'s StaffSync account is suspended. Contact StaffSync support.', 403);
+  }
 
   sendSuccess(res, {
     message: 'Login successful',
-    data: { token: signToken(user._id), user },
+    data: { token: signToken(user._id), user, organisation: organisationSummary(organisation) },
   });
 };
 
@@ -68,7 +62,7 @@ const getMe = async (req, res) => {
   const employee = req.employeeLookup ?? await Employee.findOne({ userId: req.user._id });
   sendSuccess(res, {
     message: 'Current user',
-    data: { user: req.user, employee },
+    data: { user: req.user, employee, organisation: organisationSummary(req.organisation) },
   });
 };
 
@@ -110,4 +104,4 @@ const resetPassword = async (req, res) => {
   sendSuccess(res, { message: 'Your password has been reset. Please log in.' });
 };
 
-module.exports = { register, login, getMe, changePassword, forgotPassword, resetPassword };
+module.exports = { organisationSummary, login, getMe, changePassword, forgotPassword, resetPassword };

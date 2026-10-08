@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantScoped = require('./plugins/tenantScoped');
 
 const ATTENDANCE_STATUSES = ['present', 'half-day', 'absent'];
 
@@ -50,10 +51,12 @@ const attendanceSchema = new mongoose.Schema(
 );
 
 // One record per employee per day: the database itself rejects a second check-in.
+attendanceSchema.plugin(tenantScoped);
+
 attendanceSchema.index({ employeeId: 1, date: 1 }, { unique: true });
 // Serves date filters and the newest-first sort ({ date: -1, checkIn: -1 }, read backwards), so
 // company-wide lists never sort every record in memory.
-attendanceSchema.index({ date: 1, checkIn: 1 });
+attendanceSchema.index({ organisationId: 1, date: 1, checkIn: 1 });
 
 module.exports = mongoose.model('Attendance', attendanceSchema);
 module.exports.ATTENDANCE_STATUSES = ATTENDANCE_STATUSES;

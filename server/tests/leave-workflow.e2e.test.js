@@ -37,11 +37,13 @@ describe('leave workflow across employee, manager and HR', () => {
     people.manager = { employeeId: x.body.data._id, token: await login('mia@staffsync.test', 'Manager123') };
   });
 
-  it('an employee registers, then HR places them in the manager’s team', async () => {
-    const reg = await ctx.call('POST', '/auth/register', null, { name: 'Asha Kumar', email: 'asha@staffsync.test', password: 'Employee123' });
-    assert.equal(reg.status, 201);
-    assert.equal(reg.body.data.employee.department, 'Unassigned');
-    people.employee = { employeeId: reg.body.data.employee._id, token: await login('asha@staffsync.test', 'Employee123') };
+  it('HR adds an employee, then places them in the manager’s team', async () => {
+    const added = await ctx.call('POST', '/employees', hr.token, {
+      name: 'Asha Kumar', email: 'asha@staffsync.test', password: 'Employee123', department: 'Unassigned', designation: 'Unassigned',
+    });
+    assert.equal(added.status, 201);
+    assert.equal(added.body.data.userId.role, 'employee');
+    people.employee = { employeeId: added.body.data._id, token: await login('asha@staffsync.test', 'Employee123') };
 
     const placed = await ctx.call('PUT', `/employees/${people.employee.employeeId}`, hr.token, {
       department: 'Engineering', designation: 'Software Engineer', managerId: people.manager.employeeId,

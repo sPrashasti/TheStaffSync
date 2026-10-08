@@ -15,15 +15,22 @@ const assertJwtConfig = () => {
   }
 };
 
-// The payload holds only the user id. Role and active status are read from the
-// database on every request, so changes take effect without waiting for the token to expire.
-const signToken = (userId) =>
-  jwt.sign({ id: String(userId) }, process.env.JWT_SECRET, {
+// Which kind of account a token belongs to. Organisation users and platform admins live in
+// different collections, and each API accepts only its own kind (see authMiddleware).
+const SCOPES = { org: 'org', platform: 'platform' };
+
+// The payload holds only the account id and its kind. Role, organisation and active status are
+// read from the database on every request, so changes take effect without waiting for the token
+// to expire, and a token can never choose its organisation.
+const signToken = (accountId, scope = SCOPES.org) => {
+  if (!Object.values(SCOPES).includes(scope)) throw new Error(`Unknown token scope: ${scope}`);
+  return jwt.sign({ id: String(accountId), scope }, process.env.JWT_SECRET, {
     algorithm: ALGORITHM,
     expiresIn: process.env.JWT_EXPIRES_IN || '1d',
   });
+};
 
 // Pinning the algorithm stops a token that claims a different one (e.g. "none") from being accepted.
 const verifyToken = (token) => jwt.verify(token, process.env.JWT_SECRET, { algorithms: [ALGORITHM] });
 
-module.exports = { assertJwtConfig, signToken, verifyToken };
+module.exports = { SCOPES, assertJwtConfig, signToken, verifyToken };

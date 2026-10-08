@@ -26,7 +26,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import BrandMark from '../components/BrandMark';
 import NotificationBell from '../components/NotificationBell';
 import ThemeToggle from '../components/ThemeToggle';
-import { logout, selectUser } from '../store/authSlice';
+import { logout, selectOrganisation, selectUser } from '../store/authSlice';
 import { DISPLAY_TIME_ZONES, selectDisplayTimeZone, setDisplayTimeZone } from '../store/preferencesSlice';
 import { NAVIGATION, ROLE_LABELS } from '../routes/navigation';
 
@@ -38,6 +38,7 @@ const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).ma
 function AppLayout() {
   const dispatch = useDispatch();
   const user = useSelector(selectUser);
+  const organisation = useSelector(selectOrganisation);
   const displayTimeZone = useSelector(selectDisplayTimeZone);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenu, setUserMenu] = useState(null);
@@ -48,6 +49,10 @@ function AppLayout() {
       <Toolbar sx={{ px: 2.5 }}>
         <BrandMark />
       </Toolbar>
+      {/* Which company's data this is: matters to anyone who works with several. */}
+      <Typography variant="body2" color="text.secondary" noWrap title={organisation?.name} sx={{ px: 2.5, pb: 1.5, fontWeight: 600 }}>
+        {organisation?.name}
+      </Typography>
       <Divider />
       <List component="nav" aria-label="Main menu" sx={{ py: 1.5 }}>
         {items.map(({ path, label, icon: Icon }) => (
@@ -137,7 +142,7 @@ function AppLayout() {
             <Box sx={{ px: 2, py: 1 }}>
               <Typography fontWeight={600}>{user.name}</Typography>
               <Typography variant="body2" color="text.secondary">{user.email}</Typography>
-              <Typography variant="caption" color="text.secondary">{ROLE_LABELS[user.role]}</Typography>
+              <Typography variant="caption" color="text.secondary">{ROLE_LABELS[user.role]}{organisation && ` · ${organisation.name}`}</Typography>
             </Box>
             <Divider />
             <MenuItem onClick={() => dispatch(logout())}>

@@ -1,5 +1,5 @@
-// One password policy for every place a password is set: the register endpoint,
-// HR-created accounts and the seed script.
+// One password policy for every place a password is set: organisation sign-up,
+// HR-created accounts, platform admins and the seed script.
 
 // bcrypt ignores everything after 72 bytes, so longer passwords would be silently truncated.
 const MAX_PASSWORD_BYTES = 72;

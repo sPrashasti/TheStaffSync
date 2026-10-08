@@ -1,7 +1,7 @@
 const { body, checkExact } = require('express-validator');
 const { passwordProblem } = require('../utils/passwordPolicy');
 
-// Shared with the HR "create employee" endpoint in Phase 6.
+// Shared with the HR "create employee" endpoint.
 const newPasswordRule = (field = 'password') =>
   body(field).custom((value) => {
     const problem = passwordProblem(value);
@@ -17,14 +17,26 @@ const emailRule = () =>
     .isEmail().withMessage('Email is not valid')
     .isLength({ max: 254 }).withMessage('Email is too long');
 
-const registerRules = [
-  body('name')
-    .isString().withMessage('Name is required')
-    .trim()
-    .notEmpty().withMessage('Name is required')
-    .isLength({ max: 100 }).withMessage('Name cannot exceed 100 characters'),
-  emailRule(),
-  newPasswordRule(),
+// POST /api/organisations/signup: a new organisation and its first HR user. Only these fields
+// are accepted, so a role, status or organisationId can never be sent along.
+const signupRules = [
+  checkExact(
+    [
+      body('companyName')
+        .isString().withMessage('Company name is required')
+        .trim()
+        .isLength({ min: 2 }).withMessage('Company name must be at least 2 characters')
+        .isLength({ max: 100 }).withMessage('Company name cannot exceed 100 characters'),
+      body('name')
+        .isString().withMessage('Name is required')
+        .trim()
+        .notEmpty().withMessage('Name is required')
+        .isLength({ max: 100 }).withMessage('Name cannot exceed 100 characters'),
+      emailRule(),
+      newPasswordRule(),
+    ],
+    { locations: ['body'] }
+  ),
 ];
 
 // Login only checks that something was sent; strength rules would leak policy details
@@ -67,7 +79,7 @@ const resetPasswordRules = [
 ];
 
 module.exports = {
-  registerRules,
+  signupRules,
   loginRules,
   changePasswordRules,
   forgotPasswordRules,

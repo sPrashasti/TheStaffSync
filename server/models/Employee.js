@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantScoped = require('./plugins/tenantScoped');
 const Counter = require('./Counter');
 const { isValidTimeZone } = require('../utils/dates');
 
@@ -10,10 +11,10 @@ const employeeSchema = new mongoose.Schema(
       required: [true, 'User reference is required'],
       unique: true,
     },
-    // Assigned automatically on creation, e.g. EMP0001.
+    // Assigned automatically on creation, e.g. EMP0001. Unique within the organisation: every
+    // organisation numbers its own employees from EMP0001.
     employeeId: {
       type: String,
-      unique: true,
     },
     department: {
       type: String,
@@ -69,12 +70,16 @@ const employeeSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Before the hook below: stamping organisationId comes first, as the number depends on it.
+employeeSchema.plugin(tenantScoped);
+
+employeeSchema.index({ organisationId: 1, employeeId: 1 }, { unique: true });
 employeeSchema.index({ managerId: 1 });
-employeeSchema.index({ department: 1 });
+employeeSchema.index({ organisationId: 1, department: 1 });
 
 employeeSchema.pre('validate', async function assignEmployeeId() {
-  if (this.isNew && !this.employeeId) {
-    const seq = await Counter.next('employeeId');
+  if (this.isNew && !this.employeeId && this.organisationId) {
+    const seq = await Counter.next(Counter.employeeIdKey(this.organisationId));
     this.employeeId = `EMP${String(seq).padStart(4, '0')}`;
   }
 });

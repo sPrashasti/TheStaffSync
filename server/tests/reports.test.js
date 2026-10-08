@@ -64,9 +64,11 @@ describe('dashboards and reports', () => {
     await ctx.makeUser({ email: 'new@t.test', department: 'New', joiningDate: new Date(`${today}T00:00:00Z`) });
     let x = await report(`attendance-summary?from=${addDays(today, -3)}&to=${today}&department=New`);
     assert.equal(x.body.data.byEmployee.items[0].absent, 0);
-    process.env.WORKING_DAYS = 'Mon,Tue,Wed,Thu,Fri,Sat';
+    // The working week is the organisation's own setting, changed by its HR.
+    const week = (workingDays) => ctx.call('PUT', '/organisations/me', hr.token, { settings: { workingDays } });
+    assert.equal((await week(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'])).status, 200);
     x = await report('attendance-summary?from=2026-09-15&to=2026-09-30&department=Finance');
-    process.env.WORKING_DAYS = 'Mon,Tue,Wed,Thu,Fri';
+    await week(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
     assert.equal(x.body.data.byEmployee.items[0].absent, weekdays('2026-09-15', '2026-09-30') + 2, 'plus two Saturdays');
     assert.equal((await report('attendance-summary?from=2024-01-01&to=2026-01-01')).status, 400, 'over 366 days');
   });

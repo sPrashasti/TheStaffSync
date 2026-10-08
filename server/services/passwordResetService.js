@@ -2,6 +2,7 @@
 // it comes back.
 const crypto = require('crypto');
 const User = require('../models/User');
+const { runAsPlatform } = require('../utils/tenantContext');
 const { sendMail } = require('../utils/mailer');
 
 const tokenMinutes = () => Number(process.env.RESET_TOKEN_MINUTES) || 30;
@@ -48,7 +49,8 @@ const resetEmail = (name, link, minutes) => {
 
 // Issues a new token (replacing any earlier one) and emails the link. Does nothing for unknown or
 // deactivated accounts; the caller's response is the same either way.
-const requestReset = async (email) => {
+// Platform-level, like login: the person is not signed in, so no organisation is known yet.
+const requestReset = (email) => runAsPlatform(async () => {
   const user = await User.findOne({ email, isActive: true });
   if (!user) return false;
 
@@ -61,11 +63,11 @@ const requestReset = async (email) => {
   const link = `${appUrl()}/reset-password?token=${token}`;
   await sendMail({ to: user.email, ...resetEmail(user.name, link, minutes) });
   return true;
-};
+});
 
 // Sets a new password if the token is valid, unexpired and unused. Returns false otherwise.
 // Saving the password also records passwordChangedAt, which signs out every existing session.
-const resetPassword = async (token, newPassword) => {
+const resetPassword = (token, newPassword) => runAsPlatform(async () => {
   const user = await User.findOne({
     passwordResetTokenHash: hashToken(token),
     passwordResetExpires: { $gt: new Date() },
@@ -78,6 +80,6 @@ const resetPassword = async (token, newPassword) => {
   user.passwordResetExpires = undefined;
   await user.save();
   return true;
-};
+});
 
 module.exports = { requestReset, resetPassword, hashToken };

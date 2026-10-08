@@ -30,7 +30,7 @@ export function RequireRole({ role }) {
   return <Outlet />;
 }
 
-// Login and register are for signed-out visitors; signed-in users go to their dashboard.
+// Login and sign-up are for signed-out visitors; signed-in users go to their dashboard.
 export function PublicOnly() {
   const { status, user } = useSelector(selectAuth);
   if (status === 'authenticated') return <Navigate to={homePathFor(user.role)} replace />;

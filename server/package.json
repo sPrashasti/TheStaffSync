@@ -16,7 +16,9 @@
     "seed:demo": "node seed/seed.js --demo",
     "clean:test-data": "node scripts/cleanTestData.js",
     "test": "node --test \"tests/*.test.js\"",
-    "bench": "node scripts/benchmark.js"
+    "bench": "node scripts/benchmark.js",
+    "migrate:tenancy": "node scripts/migrateTenancy.js",
+    "platform:create-admin": "node scripts/createPlatformAdmin.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

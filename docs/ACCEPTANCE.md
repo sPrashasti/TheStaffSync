@@ -27,7 +27,7 @@ Legend: ✅ pass · 🟡 pass on code and API evidence, browser walkthrough stil
 
 | # | Criterion | Status | Evidence |
 |---|---|---|---|
-| 1 | Self-registration creates an **employee** only; a `role` in the request is ignored | ✅ | `auth.test.js` "registers an employee…"; `security.test.js` "ignores privilege fields"; Postman *Register ignores role field* |
+| 1 | ~~Self-registration creates an **employee** only~~ Replaced in Phase 19: there is no self-registration; a company signs up and its first user is HR, and a `role` or other extra field is refused | ✅ | `auth.test.js` "has no employee self-registration", "refuses privilege and organisation fields"; `security.test.js` "refuses privilege fields"; Postman *Self-registration has been removed*, *Sign-up refuses a role field* |
 | 2 | Login issues a JWT; `GET /api/auth/me` returns the user and employee profile | ✅ | `auth.test.js` login and `/auth/me` tests; Postman *Login*, *Get current user* |
 | 3 | Passwords are bcrypt-hashed (cost ≥ 10) and never returned | ✅ | Cost 12 asserted in `auth.test.js`; `security.test.js` "never returns password hashes" |
 | 4 | Missing, invalid or expired tokens → 401; wrong role → 403, enforced on the server for every protected route | ✅ | `auth.test.js` token tests (expired, forged, `alg:none`); `acceptance-endpoints.test.js` 403 check on every role-restricted endpoint |
@@ -103,6 +103,20 @@ Legend: ✅ pass · 🟡 pass on code and API evidence, browser walkthrough stil
 |---|---|---|---|
 | 30 | Postman collection covering success and failure per endpoint, and a README that documents setup, every endpoint, errors and testing | ✅ | 171 requests / 421 assertions passing; README sections for each module, *Automated tests*, *Performance*, *Security*, *Troubleshooting* |
 
+## Phase 19 addendum: organisations (multi-tenancy)
+
+Re-checked on 7 Oct 2026 after Phase 19:
+
+| Evidence | Result |
+|---|---|
+| Server test suite | **155 / 155 passed**, including the strict `tenant-isolation.test.js` |
+| Endpoint acceptance test | **45 / 45** (adds organisation sign-up and `GET`/`PUT /organisations/me`) |
+| Client tests and production build | **8 / 8**; build succeeds |
+| Postman (against a throwaway database) | **187 requests, 464 assertions, 0 failures** |
+| Migration of the existing database | Dry run approved, then applied: 98 accounts into DemoTech Solutions (96) and DemoTech Corporation (2); verification found every record in an organisation and no profile split from its account |
+
+The browser walkthrough (criterion 29) should be repeated for the sign-up page and Company settings.
+
 ## Deviations from the original plan
 
 All of these are documented in the README.
@@ -120,6 +134,7 @@ All of these are documented in the README.
 | Redux for auth only | Auth plus the display time zone preference | A UI preference, not page data |
 | Profile page for employees | For every role | Everyone can update contact details and change password |
 | nodemon in development | `node --watch` | One less dependency, and nodemon pulled in a vulnerable package |
+| One company per installation; public employee registration | Many organisations, isolated from each other; companies sign up, HR adds employees; `TIMEZONE`/`WORKING_DAYS` become defaults for new organisations | Phase 19: StaffSync offered as SaaS |
 
 ## Known limitations (accepted for this version)
 

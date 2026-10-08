@@ -1,6 +1,7 @@
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import BadgeIcon from '@mui/icons-material/Badge';
+import BusinessIcon from '@mui/icons-material/Business';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import EventNoteIcon from '@mui/icons-material/EventNote';
@@ -41,6 +42,7 @@ export const NAVIGATION = {
     { path: 'announcements', label: 'Announcements', icon: CampaignIcon, page: 'announcements' },
     { path: 'reports', label: 'Reports', icon: AssessmentIcon, page: 'reports' },
     { path: 'notifications', label: 'Notifications', icon: NotificationsIcon, page: 'notifications' },
+    { path: 'company', label: 'Company settings', icon: BusinessIcon, page: 'companySettings' },
     { path: 'profile', label: 'My profile', icon: PersonIcon, page: 'profile' },
   ],
 };

@@ -1,5 +1,7 @@
-const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
+const tenantScoped = require('./plugins/tenantScoped');
+const withPassword = require('./plugins/withPassword');
+const { runAsPlatform } = require('../utils/tenantContext');
 
 const ROLES = ['employee', 'manager', 'hr'];
 
@@ -11,6 +13,8 @@ const userSchema = new mongoose.Schema(
       trim: true,
       maxlength: [100, 'Name cannot exceed 100 characters'],
     },
+    // Unique across the whole platform, not just the organisation, so sign-in needs only the
+    // email address. Checks for an address in use must therefore run with runAsPlatform().
     email: {
       type: String,
       required: [true, 'Email is required'],
@@ -19,23 +23,10 @@ const userSchema = new mongoose.Schema(
       trim: true,
       match: [/^\S+@\S+\.\S+$/, 'Email is not valid'],
     },
-    // Stores the bcrypt hash (see the pre-save hook below). Never returned by queries
-    // unless explicitly requested with .select('+password').
-    password: {
-      type: String,
-      required: [true, 'Password is required'],
-      select: false,
-    },
     role: {
       type: String,
       enum: { values: ROLES, message: 'Role must be one of: employee, manager, hr' },
       default: 'employee',
-    },
-    // When the password last changed. Tokens issued before this are rejected, which signs out
-    // every other session.
-    passwordChangedAt: {
-      type: Date,
-      select: false,
     },
     // Password reset by email: only a SHA-256 hash of the emailed token is stored, so a copy of
     // the database cannot be used to reset anyone's password.
@@ -68,27 +59,16 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-userSchema.index({ role: 1, isActive: 1 });
+// Every user belongs to exactly one organisation (see plugins/tenantScoped).
+userSchema.plugin(tenantScoped);
+userSchema.plugin(withPassword);
 
-const SALT_ROUNDS = 12;
+userSchema.index({ organisationId: 1, role: 1, isActive: 1 });
 
-// Hash on create and whenever the password changes, never on other updates.
-// Only covers save()/create(); updateOne/findOneAndUpdate would bypass this, so never set passwords that way.
-userSchema.pre('save', async function hashPassword() {
-  if (!this.isModified('password')) return;
-  this.password = await bcrypt.hash(this.password, SALT_ROUNDS);
-  // A second earlier, so the token issued with the new password (whole seconds) still counts.
-  if (!this.isNew) this.passwordChangedAt = new Date(Date.now() - 1000);
-});
-
-// True if a token issued at `issuedAt` (seconds) predates the latest password change.
-userSchema.methods.changedPasswordAfter = function changedPasswordAfter(issuedAt) {
-  return Boolean(this.passwordChangedAt) && issuedAt < Math.floor(this.passwordChangedAt.getTime() / 1000);
-};
-
-// Requires the document to have been loaded with .select('+password').
-userSchema.methods.comparePassword = function comparePassword(candidate) {
-  return bcrypt.compare(candidate, this.password);
+// True if any organisation already has an account with this email. Deliberately platform-wide:
+// addresses are unique across StaffSync, so sign-in needs only the email.
+userSchema.statics.emailInUse = function emailInUse(email) {
+  return runAsPlatform(async () => Boolean(await this.exists({ email })));
 };
 
 module.exports = mongoose.model('User', userSchema);

@@ -1,13 +1,17 @@
-// Removes the accounts the Postman collection creates (postman+…@staffsync.test) and everything
-// that belongs to them. Development only.
+// Removes the accounts the Postman collection creates (postman+…@staffsync.test), everything
+// that belongs to them, and the organisations its sign-up requests create. Development only.
 //
 //   npm run clean:test-data          show what would be deleted
 //   npm run clean:test-data -- --yes delete it
+//
+// Test accounts that already existed when the Phase 19 migration ran were kept on purpose as
+// demo data (in DemoTech Solutions), so they are never touched unless --include-preserved is given.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env'), quiet: true });
 
 const mongoose = require('mongoose');
 const { connectDB, disconnectDB } = require('../config/db');
-const { User, Employee, Attendance, Leave, Notification, Training } = require('../models');
+const { Organisation, Counter, User, Employee, Attendance, Leave, Notification, Training, Announcement } = require('../models');
+const { runAsPlatform } = require('../utils/tenantContext');
 
 const TEST_EMAIL = /^postman\+[^@]*@staffsync\.test$/;
 
@@ -18,8 +22,20 @@ const run = async () => {
   const confirmed = process.argv.includes('--yes');
 
   await connectDB();
+  // Platform-level: test accounts are found by email in whichever organisation they are in.
+  await runAsPlatform(() => clean(confirmed));
+};
 
-  const userIds = await User.find({ email: TEST_EMAIL }).distinct('_id');
+const clean = async (confirmed) => {
+  const filter = { email: TEST_EMAIL };
+  const migration = await mongoose.connection.db.collection('migrations').findOne({ _id: 'phase-19-tenancy' });
+  if (migration?.appliedAt && !process.argv.includes('--include-preserved')) {
+    filter.createdAt = { $gt: migration.startedAt };
+    const kept = await User.countDocuments({ email: TEST_EMAIL, createdAt: { $lte: migration.startedAt } });
+    console.log(`  ${String(kept).padStart(5)} test accounts kept as demo data (created before the Phase 19 migration)`);
+  }
+  const userIds = await User.find(filter).distinct('_id');
+  const organisationIds = await User.find({ _id: { $in: userIds } }).distinct('organisationId');
   const employeeIds = await Employee.find({ userId: { $in: userIds } }).distinct('_id');
   const byEmployee = { employeeId: { $in: employeeIds } };
   const leaveIds = await Leave.find(byEmployee).distinct('_id');
@@ -46,6 +62,20 @@ const run = async () => {
     );
     console.log(`  ${String(modifiedCount).padStart(5)} trainings had test participants removed`);
   }
+
+  // Organisations left with nobody in them were created by Postman's sign-up requests. Real
+  // organisations always keep at least their HR account, so they are never removed here.
+  const emptied = [];
+  for (const id of organisationIds) {
+    const remaining = await User.countDocuments({ organisationId: id, _id: { $nin: userIds } });
+    if (remaining === 0) emptied.push(id);
+  }
+  if (confirmed && emptied.length > 0) {
+    await Promise.all([Announcement, Training, Notification, Attendance, Leave].map((Model) => Model.deleteMany({ organisationId: { $in: emptied } })));
+    await Counter.deleteMany({ _id: { $in: emptied.map((id) => Counter.employeeIdKey(id)) } });
+    await Organisation.deleteMany({ _id: { $in: emptied } });
+  }
+  console.log(`  ${String(emptied.length).padStart(5)} test organisations${confirmed ? ' deleted' : ''}`);
 
   console.log(confirmed ? 'Test data removed.' : 'Nothing deleted. Re-run with -- --yes to delete.');
 };

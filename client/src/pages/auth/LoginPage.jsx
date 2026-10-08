@@ -83,8 +83,8 @@ function LoginPage() {
           {submitting ? 'Logging in…' : 'Log in'}
         </Button>
         <Typography variant="body2" textAlign="center">
-          New employee?{' '}
-          <Link component={RouterLink} to="/register">Create an account</Link>
+          New to StaffSync?{' '}
+          <Link component={RouterLink} to="/signup">Set up your organisation</Link>
         </Typography>
       </Stack>
     </AuthCard>

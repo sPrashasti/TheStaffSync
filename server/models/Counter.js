@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
-// Sequence numbers for human-readable IDs such as EMP0001.
+// Sequence numbers for human-readable IDs such as EMP0001, one sequence per organisation.
+// Platform-level (keyed by organisation in _id), so not tenant-scoped.
 // $inc is atomic, so two employees created at the same moment never get the same number.
 const counterSchema = new mongoose.Schema(
   {
@@ -18,5 +19,8 @@ counterSchema.statics.next = async function next(name) {
   );
   return counter.seq;
 };
+
+// The key of an organisation's employee number sequence.
+counterSchema.statics.employeeIdKey = (organisationId) => `${organisationId}:employeeId`;
 
 module.exports = mongoose.model('Counter', counterSchema);
