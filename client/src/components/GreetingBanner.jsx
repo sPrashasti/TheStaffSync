@@ -34,7 +34,7 @@ function GreetingBanner({ name, subtitle }) {
         '&::after': { content: '""', position: 'absolute', left: 0, right: 0, bottom: 0, height: 2, background: 'var(--metal)', opacity: 0.7 },
       }}
     >
-      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'flex-start' }} spacing={1}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ justifyContent: 'space-between', alignItems: { sm: 'flex-start' } }}>
         <Box>
           <Typography variant="h4" component="h1" sx={{ color: 'var(--hero-text)', fontSize: { xs: '1.6rem', sm: '2.1rem' } }}>
             {greetingFor(hour)}, {name.split(' ')[0]}

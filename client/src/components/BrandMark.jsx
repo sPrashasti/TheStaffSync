@@ -4,7 +4,7 @@ import { Box, Stack, Typography } from '@mui/material';
 function BrandMark({ size = 'medium' }) {
   const tile = size === 'large' ? 44 : 32;
   return (
-    <Stack direction="row" spacing={1.25} alignItems="center">
+    <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
       <Box
         aria-hidden
         sx={{

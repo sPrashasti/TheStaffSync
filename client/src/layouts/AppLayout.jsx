@@ -117,7 +117,7 @@ function AppLayout() {
           <Box sx={{ flexGrow: 1 }} />
 
           <Tooltip title="Time zone used to show times">
-            <Stack direction="row" alignItems="center" spacing={0.5}>
+            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
               <PublicIcon fontSize="small" color="action" sx={{ display: { xs: 'none', sm: 'block' } }} />
               <TextField
                 select
@@ -141,7 +141,7 @@ function AppLayout() {
           </IconButton>
           <Menu anchorEl={userMenu} open={Boolean(userMenu)} onClose={() => setUserMenu(null)}>
             <Box sx={{ px: 2, py: 1 }}>
-              <Typography fontWeight={600}>{user.name}</Typography>
+              <Typography sx={{ fontWeight: 600 }}>{user.name}</Typography>
               <Typography variant="body2" color="text.secondary">{user.email}</Typography>
               <Typography variant="caption" color="text.secondary">{ROLE_LABELS[user.role]}{organisation && ` · ${organisation.name}`}</Typography>
             </Box>

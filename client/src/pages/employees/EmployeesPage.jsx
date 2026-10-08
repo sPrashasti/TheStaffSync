@@ -80,7 +80,7 @@ function EmployeesPage({ fixedRole }) {
         actions={<Button variant="premium" startIcon={<AddIcon />} onClick={() => setCreating(true)}>Add {fixedRole === 'manager' ? 'manager' : 'person'}</Button>}
       />
       <Card variant="outlined">
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ p: 2 }} flexWrap="wrap" useFlexGap>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ flexWrap: 'wrap', p: 2 }} useFlexGap>
           <TextField label="Department" size="small" value={filters.department} onChange={set('department')} />
           {!fixedRole && (
             <TextField select label="Role" size="small" value={filters.role} onChange={set('role')} sx={{ minWidth: 150 }}>
@@ -122,7 +122,7 @@ function EmployeesPage({ fixedRole }) {
                     <TableCell>{e.managerId?.userId?.name || '—'}</TableCell>
                     <TableCell><StatusChip status={e.userId.isActive ? 'active' : 'inactive'} /></TableCell>
                     <TableCell align="right">
-                      <Stack direction="row" spacing={1} justifyContent="flex-end">
+                      <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
                         <Button size="small" onClick={() => setEditing(e)}>Edit</Button>
                         {e.userId.isActive && e.userId._id !== me._id && (
                           <Button size="small" color="error" onClick={() => setConfirming(e)}>Deactivate</Button>

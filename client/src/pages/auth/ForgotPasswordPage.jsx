@@ -56,7 +56,7 @@ function ForgotPasswordPage() {
           <Button type="submit" variant="contained" size="large" disabled={busy}>
             {busy ? 'Sending…' : 'Send reset link'}
           </Button>
-          <Typography variant="body2" textAlign="center">
+          <Typography variant="body2" sx={{ textAlign: 'center' }}>
             Remembered it? <Link component={RouterLink} to="/login">Log in</Link>
           </Typography>
         </Stack>

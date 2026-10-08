@@ -139,8 +139,8 @@ function AnnouncementsPage() {
           {data?.items.map((a) => (
             <Card key={a._id} variant="outlined">
               <CardContent>
-                <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-                  <Typography variant="h6" fontWeight={700}>{a.title}</Typography>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700 }}>{a.title}</Typography>
                   {canPost && <Chip size="small" label={audienceLabel(a.targetAudience)} />}
                 </Stack>
                 <Typography variant="caption" color="text.secondary">

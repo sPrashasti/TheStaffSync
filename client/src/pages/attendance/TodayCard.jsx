@@ -39,14 +39,14 @@ function TodayCard({ onChange }) {
       <CardContent>
         <LoadState loading={loading} error={error} data={data} onRetry={reload}>
           {data && (
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ sm: 'center' }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
               <div>
                 <Typography variant="overline" color="text.secondary">Today</Typography>
-                <Typography variant="h6" fontWeight={700}>{formatDay(data.date)}</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatDay(data.date)}</Typography>
                 <Typography variant="body2" color="text.secondary">
                   Your working day follows {data.timeZone}
                 </Typography>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 1 }}>
                   <StatusChip status={status} />
                   {record && (
                     <Typography variant="body2">

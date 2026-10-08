@@ -87,7 +87,7 @@ function ProfilePage() {
         {data && (
           <Card variant="outlined">
             <CardContent>
-              <Typography variant="h6" fontWeight={700}>{data.userId.name}</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>{data.userId.name}</Typography>
               <Typography color="text.secondary">{data.designation} · {data.department}</Typography>
               <Divider sx={{ my: 2 }} />
               <Row label="Employee ID" value={data.employeeId} />

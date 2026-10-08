@@ -64,7 +64,7 @@ function LeaveTable({ scope = 'my', defaultStatus = '', refreshKey = 0 }) {
 
   return (
     <Card variant="outlined">
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ p: 2 }} flexWrap="wrap" useFlexGap>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ flexWrap: 'wrap', p: 2 }} useFlexGap>
         <TextField select label="Status" size="small" value={filters.status} onChange={set('status')} sx={{ minWidth: 150 }}>
           <MenuItem value="">Any</MenuItem>
           <MenuItem value="pending">Pending</MenuItem>
@@ -116,7 +116,7 @@ function LeaveTable({ scope = 'my', defaultStatus = '', refreshKey = 0 }) {
                   <TableCell sx={{ maxWidth: 260 }}>
                     <Typography variant="body2" noWrap title={l.reason}>{l.reason}</Typography>
                     {l.rejectionReason && (
-                      <Typography variant="caption" color="error" display="block" title={l.rejectionReason}>
+                      <Typography variant="caption" color="error" title={l.rejectionReason} sx={{ display: 'block' }}>
                         Rejected: {l.rejectionReason}
                       </Typography>
                     )}
@@ -125,7 +125,7 @@ function LeaveTable({ scope = 'my', defaultStatus = '', refreshKey = 0 }) {
                   {canDecide && (
                     <TableCell align="right">
                       {l.status === 'pending' ? (
-                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
                           <Button size="small" variant="contained" disabled={busyId === l._id} onClick={() => approve(l)}>Approve</Button>
                           <Button size="small" color="error" disabled={busyId === l._id} onClick={() => setRejecting(l)}>Reject</Button>
                         </Stack>

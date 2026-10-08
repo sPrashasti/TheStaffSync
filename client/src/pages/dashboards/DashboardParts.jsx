@@ -44,7 +44,7 @@ export function PersonalSummary({ summary }) {
   const { thisMonth, leave, trainings } = summary;
   return (
     <>
-      <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+      <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
         This month ({formatDay(thisMonth.from)} – {formatDay(thisMonth.to)})
       </Typography>
       <StatGrid>

@@ -89,7 +89,7 @@ function ResetPasswordPage() {
         <Button type="submit" variant="contained" size="large" disabled={busy}>
           {busy ? 'Saving…' : 'Reset password'}
         </Button>
-        <Typography variant="body2" textAlign="center">
+        <Typography variant="body2" sx={{ textAlign: 'center' }}>
           <Link component={RouterLink} to="/login">Back to log in</Link>
         </Typography>
       </Stack>

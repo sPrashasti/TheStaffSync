@@ -43,7 +43,7 @@ function AttendanceHistory({ scope = 'my' }) {
 
   return (
     <Card variant="outlined">
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ p: 2 }} flexWrap="wrap" useFlexGap>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ flexWrap: 'wrap', p: 2 }} useFlexGap>
         <TextField label="From" type="date" size="small" value={filters.from} onChange={set('from')} slotProps={{ inputLabel: { shrink: true } }} />
         <TextField label="To" type="date" size="small" value={filters.to} onChange={set('to')} slotProps={{ inputLabel: { shrink: true } }} />
         {scope === 'team' && (

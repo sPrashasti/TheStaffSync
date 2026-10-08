@@ -6,15 +6,13 @@ function PageHeader({ title, subtitle, actions }) {
     <Stack
       direction={{ xs: 'column', sm: 'row' }}
       spacing={2}
-      justifyContent="space-between"
-      alignItems={{ xs: 'flex-start', sm: 'center' }}
-      sx={{ mb: 3 }}
+      sx={{ justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, mb: 3 }}
     >
       <Box>
-        <Typography variant="h5" component="h1" fontWeight={700}>{title}</Typography>
+        <Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>{title}</Typography>
         {subtitle && <Typography color="text.secondary">{subtitle}</Typography>}
       </Box>
-      {actions && <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>{actions}</Stack>}
+      {actions && <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>{actions}</Stack>}
     </Stack>
   );
 }

@@ -95,7 +95,7 @@ function LoginPage() {
           helperText={fieldErrors.password}
           required
         />
-        <Typography variant="body2" textAlign="right" sx={{ mt: -1 }}>
+        <Typography variant="body2" sx={{ textAlign: 'right', mt: -1 }}>
           <Link component={RouterLink} to="/forgot-password">Forgot password?</Link>
         </Typography>
         <Button type="submit" variant="contained" size="large" disabled={submitting}>
@@ -104,7 +104,7 @@ function LoginPage() {
         {demo?.available && (
           <>
             <Divider>or try the demo</Divider>
-            <Typography variant="body2" color="text.secondary" textAlign="center">
+            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
               Explore {demo.organisationName} with sample data. No sign-up needed; changes are reset every night.
             </Typography>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
@@ -116,7 +116,7 @@ function LoginPage() {
             </Stack>
           </>
         )}
-        <Typography variant="body2" textAlign="center">
+        <Typography variant="body2" sx={{ textAlign: 'center' }}>
           New to StaffSync?{' '}
           <Link component={RouterLink} to="/signup">Set up your organisation</Link>
         </Typography>

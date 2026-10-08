@@ -179,8 +179,8 @@ function TrainingPage() {
             return (
               <Card key={t._id} variant="outlined" sx={{ display: 'flex', flexDirection: 'column' }}>
                 <CardContent sx={{ flexGrow: 1 }}>
-                  <Stack direction="row" justifyContent="space-between" spacing={1}>
-                    <Typography variant="h6" fontWeight={700}>{t.title}</Typography>
+                  <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>{t.title}</Typography>
                     <StatusChip status={t.status} />
                   </Stack>
                   <Typography variant="body2" color="text.secondary">

@@ -120,7 +120,7 @@ function OrganisationSettingsPage() {
                 {clientErrors.workingDays || errors['settings.workingDays'] || 'Used to count absences in reports.'}
               </FormHelperText>
             </Stack>
-            <Stack direction="row" justifyContent="flex-end">
+            <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
               <Button type="submit" variant="contained" disabled={busy || !valid || organisation.isDemo}>
                 {busy ? 'Saving…' : 'Save settings'}
               </Button>

@@ -120,7 +120,7 @@ export function ManagerDashboard() {
                 </Card>
               </CardRow>
 
-              <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>You</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>You</Typography>
               <PersonalSummary summary={data.me} />
             </>
           )}

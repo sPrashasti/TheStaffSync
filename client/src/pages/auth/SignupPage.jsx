@@ -76,7 +76,7 @@ function SignupPage() {
         <Button type="submit" variant="contained" size="large" disabled={submitting}>
           {submitting ? 'Setting up…' : 'Create organisation'}
         </Button>
-        <Typography variant="body2" textAlign="center">
+        <Typography variant="body2" sx={{ textAlign: 'center' }}>
           Already using StaffSync?{' '}
           <Link component={RouterLink} to="/login">Log in</Link>
         </Typography>

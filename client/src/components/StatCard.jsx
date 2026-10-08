@@ -7,7 +7,7 @@ function StatCard({ label, value, hint, color = 'text.primary', icon: Icon, acce
   return (
     <Card variant="outlined" sx={{ height: '100%' }}>
       <CardContent sx={{ '&:last-child': { pb: 2 } }}>
-        <Stack direction="row" spacing={1.75} alignItems="flex-start">
+        <Stack direction="row" spacing={1.75} sx={{ alignItems: 'flex-start' }}>
           {Icon && (
             <Box
               aria-hidden
@@ -31,7 +31,7 @@ function StatCard({ label, value, hint, color = 'text.primary', icon: Icon, acce
               {value}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{label}</Typography>
-            {hint && <Typography variant="caption" color="text.secondary" display="block">{hint}</Typography>}
+            {hint && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{hint}</Typography>}
           </Box>
         </Stack>
       </CardContent>

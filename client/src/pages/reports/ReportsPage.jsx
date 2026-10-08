@@ -221,7 +221,7 @@ function TrainingReport() {
                   { key: 'dates', label: 'Dates', render: (t) => formatDayRange(t.startDate, t.endDate) },
                   { key: 'status', label: 'Status', render: (t) => <StatusChip status={t.status} /> },
                   { key: 'seats', label: 'Enrolled', align: 'right', render: (t) => `${t.enrolled} / ${t.capacity}` },
-                  { key: 'fill', label: 'Filled', render: (t) => <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 140 }}><LinearProgress variant="determinate" value={t.fillRate} sx={{ flexGrow: 1 }} /><span>{t.fillRate}%</span></Stack> },
+                  { key: 'fill', label: 'Filled', render: (t) => <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 140 }}><LinearProgress variant="determinate" value={t.fillRate} sx={{ flexGrow: 1 }} /><span>{t.fillRate}%</span></Stack> },
                 ]}
               />
             </Section>
