@@ -1,6 +1,7 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import * as authService from '../services/authService';
 import * as organisationService from '../services/organisationService';
+import * as demoService from '../services/demoService';
 import { tokenStorage } from '../utils/storage';
 
 // status: 'checking' (a saved token is being verified), 'authenticated', 'anonymous', or
@@ -13,6 +14,19 @@ const toError = (err) => ({ message: err.message, fieldErrors: err.fieldErrors |
 export const login = createAsyncThunk('auth/login', async (credentials, { rejectWithValue }) => {
   try {
     const { token } = await authService.login(credentials);
+    tokenStorage.set(token);
+    const { user, employee, organisation } = await authService.getMe();
+    return { token, user, employee, organisation };
+  } catch (err) {
+    tokenStorage.clear();
+    return rejectWithValue(toError(err));
+  }
+});
+
+// One click on "Try the demo": signs in as the demo organisation's account for that role.
+export const demoLogin = createAsyncThunk('auth/demoLogin', async (role, { rejectWithValue }) => {
+  try {
+    const { token } = await demoService.demoLogin(role);
     tokenStorage.set(token);
     const { user, employee, organisation } = await authService.getMe();
     return { token, user, employee, organisation };
@@ -94,6 +108,7 @@ const authSlice = createSlice({
     builder
       .addCase(login.fulfilled, signedIn)
       .addCase(signup.fulfilled, signedIn)
+      .addCase(demoLogin.fulfilled, signedIn)
       .addCase(loadSession.fulfilled, signedIn)
       .addCase(loadSession.pending, (state) => {
         if (state.status === 'unavailable') state.status = 'checking';

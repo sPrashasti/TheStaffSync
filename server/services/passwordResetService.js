@@ -2,6 +2,7 @@
 // it comes back.
 const crypto = require('crypto');
 const User = require('../models/User');
+const Organisation = require('../models/Organisation');
 const { runAsPlatform } = require('../utils/tenantContext');
 const { sendMail } = require('../utils/mailer');
 
@@ -53,6 +54,8 @@ const resetEmail = (name, link, minutes) => {
 const requestReset = (email) => runAsPlatform(async () => {
   const user = await User.findOne({ email, isActive: true });
   if (!user) return false;
+  // Demo accounts are shared and their addresses are not real inboxes.
+  if (await Organisation.exists({ _id: user.organisationId, 'demo.enabled': true })) return false;
 
   const token = crypto.randomBytes(32).toString('hex');
   const minutes = tokenMinutes();

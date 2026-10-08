@@ -30,6 +30,7 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | 17 | Full acceptance check ([docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)) | ✅ 29/30 automated; browser walkthrough pending |
 | 18 | Deployment configuration ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)) | ✅ Ready; live deployment needs your Render account |
 | 19 | Multi-tenant architecture (organisations, isolation, platform admin foundation) ([docs/PHASE-19-MULTITENANCY-PLAN.md](docs/PHASE-19-MULTITENANCY-PLAN.md)) | ✅ Complete |
+| 20 | Public demo: one-click sign-in as HR, manager or employee, with a nightly reset (see *Public demo*) | ✅ Complete |
 
 ## Tech stack
 
@@ -141,6 +142,7 @@ npm run seed:demo -- --organisation "Company name"   # optional: also a demo man
 | `RATE_LIMIT_WINDOW_MINUTES` | Length of the rate-limit window | `15` |
 | `RATE_LIMIT_MAX_REQUESTS` | Requests allowed per address per window, across the whole API | `1000` |
 | `SIGNUP_MAX_PER_HOUR` | Organisation sign-ups allowed per address per hour | `10` in production, `100` otherwise |
+| `DEMO_LOGIN_MAX_REQUESTS` | One-click demo sign-ins allowed per address per `RATE_LIMIT_WINDOW_MINUTES` | `30` |
 | `TRUST_PROXY` | Number of proxies in front of the API (e.g. `1` on most hosts), so limits see the real client address. Leave unset when running directly | unset |
 | `WORKING_DAYS` | **Default for new organisations** (and code outside an organisation): working days used to count absences in reports, comma-separated from `Sun Mon Tue Wed Thu Fri Sat`. Each organisation then has its own, set by its HR. The server will not start with an invalid list | `Mon,Tue,Wed,Thu,Fri` (default); `Mon,Tue,Wed,Thu,Fri,Sat` for a six-day week |
 | `TIMEZONE` | **Default for new organisations** (and code outside an organisation): time zone (IANA name) for attendance and leave dates. Each organisation then has its own, set by its HR (see *Time zones*). The server will not start with an invalid one | `Asia/Kolkata` (IST, the default if unset) |
@@ -180,7 +182,7 @@ npm run dev
 # → CORS allowed origins: http://localhost:5173
 # → Default time zone for new organisations: Asia/Kolkata
 # → Default working days: Mon, Tue, Wed, Thu, Fri
-# → Mounted routes: /api/health, /api/auth, /api/organisations, /api/platform, /api/employees, /api/attendance, /api/leaves, /api/dashboard, /api/reports, /api/announcements, /api/trainings, /api/notifications
+# → Mounted routes: /api/health, /api/auth, /api/organisations, /api/platform, /api/demo, /api/employees, /api/attendance, /api/leaves, /api/dashboard, /api/reports, /api/announcements, /api/trainings, /api/notifications
 
 # Terminal 2 — frontend
 cd client
@@ -265,6 +267,7 @@ MONGO_URI=mongodb+srv://<username>:<password>@<cluster-host>/staffsync?retryWrit
 | `Notification` | notifications | Per-user notifications | `{ recipient, isRead, createdAt }` |
 | `Counter` | counters | Atomic `employeeId` sequence, one per organisation (internal) | — |
 | — | migrations | Log of the Phase 19 tenancy migration, used by `--rollback` and `clean:test-data` (internal) | — |
+| — | demobaselines | The public demo's baseline: a copy of its records that the nightly reset returns to (internal, written by `demo:setup`) | — |
 
 The organisation-owned collections (users, employees, attendances, leaves, announcements, trainings, notifications) all carry a required, unchangeable `organisationId`.
 
@@ -428,6 +431,8 @@ const getExample = async (req, res) => {
 | POST | `/api/platform/auth/login` | No | – (platform admins only) | 200 | 400, 401 |
 | GET | `/api/platform/me` | Platform token | platform admin | 200 | 401 |
 | GET | `/api/platform/organisations` | Platform token | platform admin | 200 | 401 |
+| GET | `/api/demo` | No | – (is a public demo available?) | 200 | – |
+| POST | `/api/demo/login` | No | – (`{ role }`: hr, manager or employee) | 200 | 400, 404, 429 |
 
 "Yes" means an organisation user's token. Every endpoint marked "Yes" can also answer **403** when the user's organisation is suspended.
 
@@ -616,6 +621,22 @@ A platform admin is a StaffSync operator who manages organisations. It is a sepa
 | `GET /api/platform/organisations` | Read-only list: `name`, `slug`, `status`, `createdAt`, `users`, `activeUsers`. No people's details |
 
 This is the foundation only; the full platform console (suspending organisations, support tools and so on) is planned for Phase 21.
+
+### Public demo
+
+One organisation can be the **public demo**, for people who want to try StaffSync without signing up (for example from a link on a CV). The login page then shows **Try the demo: HR · Manager · Employee**, which signs the visitor straight in as that organisation's account for the role, with no password.
+
+| Step | Command (in `server`) |
+|---|---|
+| Make an organisation the demo, choose the three accounts, take the baseline | `npm run demo:setup -- --organisation "DemoTech Solutions" --hr hr@staffsync.demo --manager manager@staffsync.demo --employee employee1@staffsync.demo` |
+| See when it was last reset | `npm run demo:status` |
+| Reset now | `npm run demo:reset` |
+| Turn it off (data kept) | `npm run demo:disable` |
+
+- **Platform-level only.** No API can make an organisation the demo or choose its accounts; `POST /api/demo/login` accepts only `{ role }`.
+- **Nightly reset.** Setup takes a *baseline*, a copy of every record the organisation owns. Every night at **03:00** in the organisation's time zone, the server puts the organisation back to it: records changed since are restored, records created since (visitors' announcements, people, leave, Postman runs…) are removed. No other organisation is ever touched. The server checks every 10 minutes and at start-up, so a server that was asleep at 03:00 (free hosting) resets when it wakes; two servers never reset twice. Run `demo:setup` again to take a new baseline.
+- **Guards** (enforced by the API, the app only mirrors them): no password changes (**403**) and no reset emails for demo accounts; company settings are read-only (**403**); the three sign-in accounts' email, role and active status cannot change (**403**, after the usual checks such as "manager still has a team", which answer first); new or changed email addresses must end in `@staffsync.demo` or `@staffsync.test` (**400**), so visitors cannot take real people's addresses.
+- Signed-in demo users see a banner explaining that changes are shared and reset nightly; `organisation.isDemo` is `true` in `/auth/me`.
 
 ### GET /api/employees (hr)
 
@@ -1024,7 +1045,7 @@ Symptom of a CORS misconfiguration: the request works in Postman but the browser
 
 There are three layers of tests, from fastest to most realistic.
 
-**1. API test suite** (`server`, 155 tests, about 30 seconds)
+**1. API test suite** (`server`, 161 tests, about 30 seconds)
 
 ```bash
 cd server
@@ -1050,6 +1071,7 @@ npm test
 | `security.test.js` | Headers, CORS, repeated parameters, operator injection, refused privilege fields on sign-up, sign-up and failed-login limits, password change revoking old tokens, production config, no password hashes in responses |
 | `client-app.test.js` | Production page serving: strict page CSP, deep links, asset caching, API kept as JSON |
 | `acceptance-endpoints.test.js` | Every endpoint planned in the requirements and the brief, plus the organisation endpoints (45), is mounted, open to the roles allowed and refused to a role that is not |
+| `demo.test.js` | **Public demo:** unavailable until set up; setup only for accounts in that organisation with the right roles; one-click sign-in per role and nothing else; the guards (passwords, settings, sign-in accounts, email domains, no reset emails); the reset restores edits and deactivations, removes visitors' records, continues employee numbering and leaves other organisations alone; 03:00 in the organisation's time zone (including summer time); only one of two simultaneous resets runs |
 | `tenant-isolation.test.js` | **Strict mode.** The `tenantScoped` plugin (throws without context, scopes reads, never writes across organisations); two look-alike organisations through the API (own lists only, 404 for the other's records, no cross-organisation links or notifications, settings per organisation); suspension; sign-in and password reset across organisations; platform-admin separation (own login, tokens refused across APIs, no people's details, no create API) |
 | `leave-workflow.e2e.test.js` | **End to end:** HR creates a manager → HR creates an employee → HR places them in the team → employee applies → manager notified and approves → employee notified → HR sees the same record and totals → rejection path → deactivation keeps history |
 
@@ -1073,7 +1095,7 @@ The Postman collection below remains the quickest way to exercise a running serv
 3. Click the environment's eye icon and fill in **hrPassword** and **managerPassword**. These are `SEED_HR_PASSWORD` and `SEED_DEMO_PASSWORD` from `server/.env`. Run `npm run seed:demo` first if you haven't. The passwords stay in your local Postman only; the committed environment file leaves them blank.
 4. Open the collection, choose **Run collection**, and run it with the backend started.
 
-Every request carries automated assertions. Expected result: **187 requests, 464 assertions, 0 failures**.
+Every request carries automated assertions. Expected result: **189 requests, 469 assertions, 0 failures**. The collection works whether or not the demo organisation is set up; if it is, the next nightly reset removes what the run created there.
 
 **00 Health**
 
@@ -1108,6 +1130,8 @@ Every request carries automated assertions. Expected result: **187 requests, 464
 | HR cannot change organisation status | 400, `status` reported as an unknown field |
 | Organisation token cannot use the platform API | 401 |
 | Get current user without token / invalid token / wrong scheme | 401 |
+| Demo availability | 200, `available` true or false; the three roles if true |
+| Demo sign-in with an unknown role | 400, `role` reported |
 
 Each run creates a few `postman+…@staffsync.test` accounts, and one throwaway organisation from the sign-up request, so the collection can be re-run. To remove them and everything linked to them (attendance, leave, their notifications, other people's notifications about their leave, and the throwaway organisations), run:
 

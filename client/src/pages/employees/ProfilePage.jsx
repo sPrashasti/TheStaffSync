@@ -13,11 +13,13 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { useSelector } from 'react-redux';
 import LoadState from '../../components/LoadState';
 import PageHeader from '../../components/PageHeader';
 import { useApi } from '../../hooks/useApi';
 import { useSnackbar } from '../../hooks/useSnackbar';
 import { getMyProfile, updateEmployee } from '../../services/employeeService';
+import { selectOrganisation } from '../../store/authSlice';
 import { formatDay } from '../../utils/format';
 import { ROLES } from '../../utils/labels';
 import ChangePasswordDialog from './ChangePasswordDialog';
@@ -35,6 +37,7 @@ function Row({ label, value }) {
 function ProfilePage() {
   const toast = useSnackbar();
   const { data, loading, error, reload } = useApi(getMyProfile);
+  const organisation = useSelector(selectOrganisation);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ phone: '', address: '' });
   const [errors, setErrors] = useState({});
@@ -74,7 +77,8 @@ function ProfilePage() {
         title="My profile"
         actions={data && (
           <>
-            <Button variant="outlined" onClick={() => setChangingPassword(true)}>Change password</Button>
+            {/* Demo accounts are shared, so the server refuses password changes there. */}
+            {!organisation?.isDemo && <Button variant="outlined" onClick={() => setChangingPassword(true)}>Change password</Button>}
             <Button variant="contained" onClick={open}>Edit contact details</Button>
           </>
         )}

@@ -56,6 +56,9 @@ const getMyOrganisation = (req, res) => {
 
 // PUT /api/organisations/me — hr. Name, time zone and working days of their own organisation.
 const updateMyOrganisation = async (req, res) => {
+  if (req.organisation.demo?.enabled) {
+    throw new AppError('Company settings cannot be changed in the demo.', 403);
+  }
   const organisation = await Organisation.findById(req.organisation._id);
   const { name, settings = {} } = req.body;
   if (name !== undefined) organisation.name = name;

@@ -20,6 +20,8 @@ const organisationSummary = (organisation) => ({
   name: organisation.name,
   slug: organisation.slug,
   settings: organisation.settings,
+  // The public demo: the app shows a banner and hides what the demo does not allow.
+  isDemo: Boolean(organisation.demo?.enabled),
 });
 
 // There is no POST /api/auth/register: employees cannot sign themselves up. New organisations
@@ -69,6 +71,10 @@ const getMe = async (req, res) => {
 // PUT /api/auth/password — any logged-in user. Returns a fresh token for this session; every
 // token issued before the change stops working.
 const changePassword = async (req, res) => {
+  // Everyone shares the demo accounts; one visitor must not lock the next one out.
+  if (req.organisation.demo?.enabled) {
+    throw new AppError('Changing passwords is turned off in the demo.', 403);
+  }
   const user = await User.findById(req.user._id).select('+password');
   // 400 rather than 401: the session is valid, only the field is wrong.
   if (!(await user.comparePassword(req.body.currentPassword))) {

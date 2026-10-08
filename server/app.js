@@ -15,6 +15,7 @@ const healthRoutes = require('./routes/healthRoutes');
 const authRoutes = require('./routes/authRoutes');
 const organisationRoutes = require('./routes/organisationRoutes');
 const platformRoutes = require('./routes/platformRoutes');
+const demoRoutes = require('./routes/demoRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
 const attendanceRoutes = require('./routes/attendanceRoutes');
 const leaveRoutes = require('./routes/leaveRoutes');
@@ -42,6 +43,8 @@ const routes = [
   ['/api/organisations', organisationRoutes],
   // StaffSync operators only: a separate kind of account with its own login (see protectPlatform).
   ['/api/platform', platformRoutes],
+  // The public demo organisation (one-click sign-in); see services/demoService.js.
+  ['/api/demo', demoRoutes],
   ['/api/employees', employeeRoutes],
   ['/api/attendance', attendanceRoutes],
   ['/api/leaves', leaveRoutes],

@@ -81,6 +81,7 @@ function OrganisationSettingsPage() {
       <Card sx={{ maxWidth: 640 }}>
         <CardContent>
           <Stack component="form" spacing={3} onSubmit={save} noValidate>
+            {organisation.isDemo && <Alert severity="info">Company settings are read-only in the demo.</Alert>}
             {formError && <Alert severity="error">{formError}</Alert>}
             <TextField
               label="Company name"
@@ -120,7 +121,7 @@ function OrganisationSettingsPage() {
               </FormHelperText>
             </Stack>
             <Stack direction="row" justifyContent="flex-end">
-              <Button type="submit" variant="contained" disabled={busy || !valid}>
+              <Button type="submit" variant="contained" disabled={busy || !valid || organisation.isDemo}>
                 {busy ? 'Saving…' : 'Save settings'}
               </Button>
             </Stack>

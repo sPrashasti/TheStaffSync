@@ -47,6 +47,19 @@ const organisationSchema = new mongoose.Schema(
         },
       },
     },
+    // Public demo (Phase 20). Platform-level: set only by `npm run demo:setup`, never through the
+    // API. Visitors sign in as these accounts without a password, and everything they change is
+    // put back to the baseline every night (services/demoService.js).
+    demo: {
+      enabled: { type: Boolean, default: false },
+      accounts: {
+        hr: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        manager: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        employee: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      },
+      baselineAt: Date,
+      lastResetAt: Date,
+    },
   },
   { timestamps: true }
 );

@@ -18,7 +18,11 @@
     "test": "node --test \"tests/*.test.js\"",
     "bench": "node scripts/benchmark.js",
     "migrate:tenancy": "node scripts/migrateTenancy.js",
-    "platform:create-admin": "node scripts/createPlatformAdmin.js"
+    "platform:create-admin": "node scripts/createPlatformAdmin.js",
+    "demo:setup": "node scripts/demo.js setup",
+    "demo:reset": "node scripts/demo.js reset",
+    "demo:status": "node scripts/demo.js status",
+    "demo:disable": "node scripts/demo.js disable"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

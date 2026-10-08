@@ -86,6 +86,12 @@ const createLimiters = () => {
       skipSuccessfulRequests: true,
       keyGenerator: (req) => `${ipKeyGenerator(req.ip)}|${String(req.body?.email || '').trim().toLowerCase()}`,
     }),
+    // One-click demo sign-ins per address.
+    demoLogin: limiter({
+      windowMinutes,
+      limit: numberFromEnv('DEMO_LOGIN_MAX_REQUESTS', 30),
+      message: 'Too many demo sign-ins.',
+    }),
     // New organisations signed up per address.
     signup: limiter({
       windowMinutes: 60,

@@ -113,9 +113,20 @@ Tick each box as you go. If something does not match, note the step number, the 
 | G6 | Signed out | Sign up again with the G1 email | "An account with this email already exists" |
 | G7 | Manager or employee | Open `/hr/company` | Not available to that role |
 
+## H. Public demo (Phase 20)
+
+| # | As | Do | Expect |
+|---|---|---|---|
+| H1 | Signed out | Login page | "or try the demo" with **HR**, **Manager** and **Employee** buttons |
+| H2 | Signed out | Click **Manager** | The manager dashboard, with a banner: exploring the demo, reset every night at 03:00 |
+| H3 | Demo employee | My profile | No **Change password** button |
+| H4 | Demo HR | Company settings | "Company settings are read-only in the demo"; Save is disabled |
+| H5 | Demo HR | Add a person with a gmail.com address | "In the demo, use an address ending in @staffsync.demo" |
+| H6 | Demo HR | Post an announcement, then run `npm run demo:reset` in `server` and reload | The announcement is gone |
+
 ## When you finish
 
 - [ ] All of A passed (this is the acceptance test for the leave workflow)
-- [ ] B–E and G passed, or the failures are written down with step numbers
+- [ ] B–E, G and H passed, or the failures are written down with step numbers
 
 Remove the people you created with HR → Employees (deactivate), and run `npm run clean:test-data -- --yes` in `server` if Postman runs have added test accounts.

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Alert,
   AppBar,
   Avatar,
   Box,
@@ -173,6 +174,11 @@ function AppLayout() {
 
       <Box component="main" sx={{ flexGrow: 1, minWidth: 0, p: { xs: 2, sm: 3, lg: 4 }, bgcolor: 'var(--page-bg)' }}>
         <Toolbar />
+        {organisation?.isDemo && (
+          <Alert severity="info" sx={{ mb: 3 }}>
+            You are exploring the StaffSync demo as {ROLE_LABELS[user.role]}. Try anything: changes are visible to other visitors and reset every night at 03:00.
+          </Alert>
+        )}
         <Outlet />
       </Box>
     </Box>

@@ -4,6 +4,7 @@ const User = require('../models/User');
 const AppError = require('../utils/AppError');
 const { sendSuccess, sendCreated } = require('../utils/apiResponse');
 const { getPagination, buildPage } = require('../utils/pagination');
+const { DEMO_EMAIL_DOMAINS, isDemoAccount, isDemoEmail } = require('../services/demoService');
 
 // What other people may see of an account; never the password or internal fields.
 const USER_FIELDS = 'name email role isActive';
@@ -21,6 +22,22 @@ const SELF_EDITABLE_FIELDS = ['phone', 'address'];
 
 // Reporting chains deeper than this are treated as a loop rather than walked forever.
 const MAX_REPORTING_DEPTH = 50;
+
+// The public demo: anyone can be HR there, so addresses must stay on the demo domains (visitors
+// cannot take real people's addresses), and the shared demo sign-in accounts cannot be changed.
+const assertDemoEmail = (organisation, email) => {
+  if (organisation.demo?.enabled && email && !isDemoEmail(email)) {
+    throw new AppError('Validation failed', 400, [{ field: 'email', message: `In the demo, use an address ending in @${DEMO_EMAIL_DOMAINS[0]}` }]);
+  }
+};
+const DEMO_LOCKED_FIELDS = ['email', 'role', 'isActive'];
+// changes: the requested values; only fields that would actually change count.
+const assertNotDemoAccount = (organisation, user, changes) => {
+  const locked = DEMO_LOCKED_FIELDS.filter((field) => field in changes && changes[field] !== user[field]);
+  if (locked.length > 0 && isDemoAccount(organisation, user._id)) {
+    throw new AppError('The demo sign-in accounts cannot be changed or deactivated.', 403);
+  }
+};
 
 const findPopulated = (id) => Employee.findById(id).populate(withUser).populate(withManager);
 
@@ -148,6 +165,7 @@ const getEmployee = async (req, res) => {
 const createEmployee = async (req, res) => {
   const { name, email, password, role = 'employee', managerId, ...profile } = req.body;
 
+  assertDemoEmail(req.organisation, email);
   if (await User.emailInUse(email)) {
     throw new AppError('An account with this email already exists', 409);
   }
@@ -186,6 +204,9 @@ const updateEmployee = async (req, res) => {
       roleChange: changes.role !== undefined && changes.role !== user.role,
       deactivating: changes.isActive === false && user.isActive,
     });
+    // After the general rules, so their more specific answers (409, 400) still come first.
+    assertNotDemoAccount(req.organisation, user, changes);
+    assertDemoEmail(req.organisation, changes.email);
     if (changes.managerId) await assertValidManager(changes.managerId, employee._id);
     if (changes.email && changes.email !== user.email && (await User.emailInUse(changes.email))) {
       throw new AppError('An account with this email already exists', 409);
@@ -216,6 +237,7 @@ const deactivateEmployee = async (req, res) => {
       roleChange: false,
       deactivating: true,
     });
+    assertNotDemoAccount(req.organisation, user, { isActive: false });
     user.isActive = false;
     await user.save();
   }

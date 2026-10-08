@@ -909,6 +909,58 @@
               "raw": "{\n  \"token\": \"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\n  \"newPassword\": \"Reset1234!\"\n}"
             }
           }
+        },
+        {
+          "name": "Demo availability",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('says whether a demo exists', () => pm.expect(body.data.available).to.be.a('boolean'));",
+                  "if (body.data.available) pm.test('offers the three roles', () => pm.expect(body.data.roles).to.eql(['hr', 'manager', 'employee']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/demo"
+          }
+        },
+        {
+          "name": "Demo sign-in with an unknown role returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('role error reported', () => pm.expect(body.errors.map((e) => e.field)).to.include('role'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/demo/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"admin\"\n}"
+            }
+          }
         }
       ]
     },

@@ -10,6 +10,7 @@ const { assertTimeZone, getTimeZone, assertWorkingDays, getWorkingDayNames } = r
 
 // Registers every model so Mongoose builds their indexes on connect.
 require('./models');
+const { scheduleDemoResets } = require('./services/demoService');
 
 const PORT = process.env.PORT || 5000;
 
@@ -40,6 +41,9 @@ const start = async () => {
       console.log(`Mounted routes: ${mountedPaths.join(', ')}`);
     }
   });
+
+  // Puts the public demo organisation (if there is one) back to its baseline every night.
+  scheduleDemoResets();
 
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {

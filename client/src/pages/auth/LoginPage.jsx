@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Link, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Button, Divider, Link, Stack, TextField, Typography } from '@mui/material';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
-import { clearNotice, login, selectAuth } from '../../store/authSlice';
+import { clearNotice, demoLogin, login, selectAuth } from '../../store/authSlice';
+import { getDemo } from '../../services/demoService';
 import { homePathFor } from '../../routes/navigation';
 import AuthCard from './AuthCard';
 
@@ -15,6 +16,24 @@ function LoginPage() {
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [demo, setDemo] = useState(null);
+
+  // Offer the public demo only when the server has one; a failure just hides the buttons.
+  useEffect(() => {
+    getDemo().then(setDemo).catch(() => setDemo(null));
+  }, []);
+
+  const tryDemo = async (role) => {
+    setSubmitting(true);
+    setError('');
+    const result = await dispatch(demoLogin(role));
+    setSubmitting(false);
+    if (demoLogin.fulfilled.match(result)) {
+      navigate(homePathFor(result.payload.user.role), { replace: true });
+    } else {
+      setError(result.payload?.message || 'The demo is not available right now.');
+    }
+  };
 
   // A session-expired notice is shown once, then cleared.
   useEffect(() => () => { dispatch(clearNotice()); }, [dispatch]);
@@ -82,6 +101,21 @@ function LoginPage() {
         <Button type="submit" variant="contained" size="large" disabled={submitting}>
           {submitting ? 'Logging in…' : 'Log in'}
         </Button>
+        {demo?.available && (
+          <>
+            <Divider>or try the demo</Divider>
+            <Typography variant="body2" color="text.secondary" textAlign="center">
+              Explore {demo.organisationName} with sample data. No sign-up needed; changes are reset every night.
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              {[['hr', 'HR'], ['manager', 'Manager'], ['employee', 'Employee']].map(([role, label]) => (
+                <Button key={role} variant="outlined" fullWidth disabled={submitting} onClick={() => tryDemo(role)}>
+                  {label}
+                </Button>
+              ))}
+            </Stack>
+          </>
+        )}
         <Typography variant="body2" textAlign="center">
           New to StaffSync?{' '}
           <Link component={RouterLink} to="/signup">Set up your organisation</Link>
