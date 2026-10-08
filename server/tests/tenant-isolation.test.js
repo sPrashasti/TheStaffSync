@@ -187,7 +187,7 @@ describe('tenant isolation', () => {
     it('see organisations and headcounts, not people', async () => {
       const x = await ctx.call('GET', '/platform/organisations', platform);
       assert.equal(x.status, 200);
-      const alpha = x.body.data.find((o) => o.name === 'Alpha Ltd');
+      const alpha = x.body.data.items.find((o) => o.name === 'Alpha Ltd');
       assert.equal(alpha.users, 3);
       assert.ok(!JSON.stringify(x.body).includes('@a.test'));
     });

@@ -25,11 +25,16 @@ const organisationSchema = new mongoose.Schema(
       match: [/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug may contain only lowercase letters, digits and hyphens'],
     },
     // Suspended organisations keep their data, but none of their users can sign in or use the API.
-    // Only a platform admin changes this (Phase 21).
+    // Only a platform admin changes this (platform console).
     status: {
       type: String,
       enum: { values: ORGANISATION_STATUSES, message: 'Status must be one of: active, suspended' },
       default: 'active',
+    },
+    // Why and when a platform admin suspended it; cleared on reactivation.
+    suspension: {
+      reason: { type: String, trim: true, maxlength: 500 },
+      at: Date,
     },
     // Company-wide defaults that used to come from .env.
     settings: {
@@ -65,6 +70,8 @@ const organisationSchema = new mongoose.Schema(
 );
 
 // A unique slug for a name, e.g. "DemoTech Solutions" → demotech-solutions, demotech-solutions-2…
+organisationSchema.index({ status: 1, createdAt: -1 });
+
 organisationSchema.statics.uniqueSlug = async function uniqueSlug(name) {
   const base = String(name)
     .toLowerCase()

@@ -124,9 +124,22 @@ Tick each box as you go. If something does not match, note the step number, the 
 | H5 | Demo HR | Add a person with a gmail.com address | "In the demo, use an address ending in @staffsync.demo" |
 | H6 | Demo HR | Post an announcement, then run `npm run demo:reset` in `server` and reload | The announcement is gone |
 
+## I. Platform console (Phase 21)
+
+Create a platform admin first: set `PLATFORM_ADMIN_PASSWORD` in `server/.env`, then `npm run platform:create-admin -- --name "Your Name" --email you@example.com` in `server`.
+
+| # | As | Do | Expect |
+|---|---|---|---|
+| I1 | Signed out | Open `/platform/login`, sign in with an HR account | "Invalid email or password" |
+| I2 | Signed out | Sign in with the platform admin | Overview with organisation and user counts |
+| I3 | Platform admin | Organisations → search part of a name | Only matching organisations |
+| I4 | Platform admin | Open a test organisation → **Suspend** with a reason | Red "Suspended …" banner; its HR is signed out on their next click and cannot log in |
+| I5 | Platform admin | **Reactivate** | The HR can log in again |
+| I6 | Platform admin | Audit log | Both actions, with your email and the reason |
+
 ## When you finish
 
 - [ ] All of A passed (this is the acceptance test for the leave workflow)
-- [ ] B–E, G and H passed, or the failures are written down with step numbers
+- [ ] B–E and G–I passed, or the failures are written down with step numbers
 
 Remove the people you created with HR → Employees (deactivate), and run `npm run clean:test-data -- --yes` in `server` if Postman runs have added test accounts.

@@ -31,6 +31,7 @@ Every feature is backed by a real REST API and real MongoDB persistence — no m
 | 18 | Deployment configuration ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)) | ✅ Ready; live deployment needs your Render account |
 | 19 | Multi-tenant architecture (organisations, isolation, platform admin foundation) ([docs/PHASE-19-MULTITENANCY-PLAN.md](docs/PHASE-19-MULTITENANCY-PLAN.md)) | ✅ Complete |
 | 20 | Public demo: one-click sign-in as HR, manager or employee, with a nightly reset (see *Public demo*) | ✅ Complete |
+| 21 | Platform admin console: organisations, usage, rename, suspend/reactivate, audit log (see *Platform admins*). Plans and billing come later; StaffSync is free for now | ✅ Complete |
 
 ## Tech stack
 
@@ -268,6 +269,7 @@ MONGO_URI=mongodb+srv://<username>:<password>@<cluster-host>/staffsync?retryWrit
 | `Counter` | counters | Atomic `employeeId` sequence, one per organisation (internal) | — |
 | — | migrations | Log of the Phase 19 tenancy migration, used by `--rollback` and `clean:test-data` (internal) | — |
 | — | demobaselines | The public demo's baseline: a copy of its records that the nightly reset returns to (internal, written by `demo:setup`) | — |
+| `PlatformAuditLog` | platformauditlogs | Every change made in the platform console: admin, action, organisation, details, address (append-only) | — |
 
 The organisation-owned collections (users, employees, attendances, leaves, announcements, trainings, notifications) all carry a required, unchangeable `organisationId`.
 
@@ -430,7 +432,14 @@ const getExample = async (req, res) => {
 | PUT | `/api/notifications/read-all` | Yes | owner | 200 | 401 |
 | POST | `/api/platform/auth/login` | No | – (platform admins only) | 200 | 400, 401 |
 | GET | `/api/platform/me` | Platform token | platform admin | 200 | 401 |
-| GET | `/api/platform/organisations` | Platform token | platform admin | 200 | 401 |
+| PUT | `/api/platform/auth/password` | Platform token | platform admin | 200 | 400, 401, 429 |
+| GET | `/api/platform/stats` | Platform token | platform admin | 200 | 401 |
+| GET | `/api/platform/organisations` | Platform token | platform admin (`?q=&status=&page=&limit=`) | 200 | 400, 401 |
+| GET | `/api/platform/organisations/:id` | Platform token | platform admin | 200 | 400, 401, 404 |
+| PATCH | `/api/platform/organisations/:id` | Platform token | platform admin (`{ name }` only) | 200 | 400, 401, 404 |
+| POST | `/api/platform/organisations/:id/suspend` | Platform token | platform admin (`{ reason }`) | 200 | 400, 401, 404, 409 |
+| POST | `/api/platform/organisations/:id/reactivate` | Platform token | platform admin | 200 | 401, 404, 409 |
+| GET | `/api/platform/audit` | Platform token | platform admin (`?organisationId=&action=&page=&limit=`) | 200 | 400, 401 |
 | GET | `/api/demo` | No | – (is a public demo available?) | 200 | – |
 | POST | `/api/demo/login` | No | – (`{ role }`: hr, manager or employee) | 200 | 400, 404, 429 |
 
@@ -614,13 +623,21 @@ A platform admin is a StaffSync operator who manages organisations. It is a sepa
   npm run platform:create-admin -- --name "Your Name" --email "you@example.com"
   ```
 
-| Endpoint | Returns |
-|---|---|
-| `POST /api/platform/auth/login` | **200** `data: { token, admin }`; **401** `Invalid email or password` |
-| `GET /api/platform/me` | The signed-in platform admin |
-| `GET /api/platform/organisations` | Read-only list: `name`, `slug`, `status`, `createdAt`, `users`, `activeUsers`. No people's details |
+**The platform console** is at **`/platform/login`** in the web app: a separate sign-in and session (its own token, kept apart from any company login in the same browser), with its own menu.
 
-This is the foundation only; the full platform console (suspending organisations, support tools and so on) is planned for Phase 21.
+| Page | What it does |
+|---|---|
+| Overview | Organisations (active, suspended, new in the last 30 days), user accounts, the newest sign-ups, when the public demo was last reset |
+| Organisations | Search by name, filter by status, pages of 25–100 |
+| Organisation | Usage (users by role, check-ins in the last 30 days, pending leave, trainings, announcements), settings, **HR contacts**, its recent platform actions; **Rename**, **Suspend** (reason required) and **Reactivate** |
+| Audit log | Every platform action, filterable; append-only |
+| My account | Change password (signs out other platform sessions) |
+
+- **Organisations, not people.** Platform admins see counts and the organisation's HR contacts (name and email, for support), never employee records, attendance, leave or anyone else's details.
+- **Suspension** takes effect on the organisation's users' **next request** (403, and 403 at sign-in) and deletes nothing. The reason and time are stored and shown; reactivating restores access at once, even to sessions that were open.
+- **Audit log** (`platformauditlogs`): who, when, which organisation, what changed (old and new name; suspension reason) and the address. No API edits or deletes entries.
+- Organisation **settings** (time zone, working days) remain the organisation's HR's to change; platform admins can only rename.
+- **Plans and billing** are not built yet: every organisation is free for now.
 
 ### Public demo
 
@@ -1045,7 +1062,7 @@ Symptom of a CORS misconfiguration: the request works in Postman but the browser
 
 There are three layers of tests, from fastest to most realistic.
 
-**1. API test suite** (`server`, 161 tests, about 30 seconds)
+**1. API test suite** (`server`, 170 tests, about 30 seconds)
 
 ```bash
 cd server
@@ -1071,6 +1088,7 @@ npm test
 | `security.test.js` | Headers, CORS, repeated parameters, operator injection, refused privilege fields on sign-up, sign-up and failed-login limits, password change revoking old tokens, production config, no password hashes in responses |
 | `client-app.test.js` | Production page serving: strict page CSP, deep links, asset caching, API kept as JSON |
 | `acceptance-endpoints.test.js` | Every endpoint planned in the requirements and the brief, plus the organisation endpoints (45), is mounted, open to the roles allowed and refused to a role that is not |
+| `platform.test.js` | **Platform console API (strict):** every endpoint refuses organisation tokens, HR included, and missing tokens; statistics; list search (plain text, not a regular expression), status filter and pages; detail shows usage and HR contacts but no employee details; rename only the name; suspend needs a reason, stops existing sessions and sign-in at once, leaves other organisations alone, 409 if repeated; reactivate restores the same sessions; audit entries for each change, filters, no delete route; password change revokes older platform tokens; a deactivated platform admin is refused at once |
 | `demo.test.js` | **Public demo:** unavailable until set up; setup only for accounts in that organisation with the right roles; one-click sign-in per role and nothing else; the guards (passwords, settings, sign-in accounts, email domains, no reset emails); the reset restores edits and deactivations, removes visitors' records, continues employee numbering and leaves other organisations alone; 03:00 in the organisation's time zone (including summer time); only one of two simultaneous resets runs |
 | `tenant-isolation.test.js` | **Strict mode.** The `tenantScoped` plugin (throws without context, scopes reads, never writes across organisations); two look-alike organisations through the API (own lists only, 404 for the other's records, no cross-organisation links or notifications, settings per organisation); suspension; sign-in and password reset across organisations; platform-admin separation (own login, tokens refused across APIs, no people's details, no create API) |
 | `leave-workflow.e2e.test.js` | **End to end:** HR creates a manager → HR creates an employee → HR places them in the team → employee applies → manager notified and approves → employee notified → HR sees the same record and totals → rejection path → deactivation keeps history |
@@ -1319,7 +1337,7 @@ Pages get a strict Content-Security-Policy: scripts only from the site itself, n
 ## Known limitations
 
 - Password reset needs an SMTP account in `.env` before it can email anyone outside development.
-- Platform admins have only a login and a read-only list of organisations. Suspending an organisation and the full platform console come in Phase 21.
+- No plans or billing yet: every organisation is free. Platform admins are created from the command line only, and there is one level of platform access (no read-only support role).
 - Absences are calculated in reports, not stored as records. There is no public-holiday calendar yet, so holidays count as absences.
 - Reports cover active employees only; someone deactivated part-way through a period drops out of that period's report.
 - Check-in and check-out must fall on the same calendar day.

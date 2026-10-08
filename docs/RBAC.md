@@ -66,7 +66,7 @@ Rules that apply to everyone: another organisation's records do not exist for yo
 
 **The public demo** (README *Public demo*) is one organisation that visitors enter with one click as its HR, manager or employee account. The roles behave exactly as above, with a few extra refusals so visitors cannot spoil it for each other: no password changes, read-only company settings, the three sign-in accounts' email/role/status locked, and email addresses limited to the demo domains. Everything is reset nightly.
 
-Today the platform API only lists organisations with headcounts (no people). The full console (suspending organisations and so on) is planned for Phase 21.
+The platform console (`/platform/login`) lets platform admins see organisations, their usage and HR contacts, rename them, suspend and reactivate them, and read the platform audit log, where every one of those actions is recorded. It never shows employee records.
 
 ## Mapping to the brief
 

@@ -19,11 +19,19 @@ const write = (key, value) => {
 
 const TOKEN_KEY = 'staffsync.token';
 const TIME_ZONE_KEY = 'staffsync.displayTimeZone';
+// Kept apart from the organisation token: a platform admin session is a different kind of account.
+const PLATFORM_TOKEN_KEY = 'staffsync.platformToken';
 
 export const tokenStorage = {
   get: () => read(TOKEN_KEY),
   set: (token) => write(TOKEN_KEY, token),
   clear: () => write(TOKEN_KEY, null),
+};
+
+export const platformTokenStorage = {
+  get: () => read(PLATFORM_TOKEN_KEY),
+  set: (token) => write(PLATFORM_TOKEN_KEY, token),
+  clear: () => write(PLATFORM_TOKEN_KEY, null),
 };
 
 export const timeZoneStorage = {

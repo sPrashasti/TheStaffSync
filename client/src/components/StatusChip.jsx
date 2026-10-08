@@ -22,6 +22,8 @@ const STATUSES = {
   // accounts
   active: { label: 'Active', tone: 'success' },
   inactive: { label: 'Deactivated', tone: 'neutral' },
+  // organisations (platform console)
+  suspended: { label: 'Suspended', tone: 'danger' },
 };
 
 function StatusChip({ status, size = 'small' }) {
