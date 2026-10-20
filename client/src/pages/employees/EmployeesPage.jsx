@@ -20,6 +20,7 @@ import PageHeader from '../../components/PageHeader';
 import Pager from '../../components/Pager';
 import StatusChip from '../../components/StatusChip';
 import TableMessage from '../../components/TableMessage';
+import UserAvatar from '../../components/UserAvatar';
 import { useApi } from '../../hooks/useApi';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useSnackbar } from '../../hooks/useSnackbar';
@@ -115,7 +116,12 @@ function EmployeesPage({ fixedRole }) {
                 {data?.items.map((e) => (
                   <TableRow key={e._id} hover>
                     <TableCell>{e.employeeId}</TableCell>
-                    <TableCell>{e.userId.name}<br /><small>{e.userId.email}</small></TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                        <UserAvatar userId={e.userId._id} name={e.userId.name} photoUpdatedAt={e.userId.photoUpdatedAt} size={34} />
+                        <span>{e.userId.name}<br /><small>{e.userId.email}</small></span>
+                      </Stack>
+                    </TableCell>
                     <TableCell>{roleLabel(e.userId.role)}</TableCell>
                     <TableCell>{e.department}</TableCell>
                     <TableCell>{e.designation}</TableCell>

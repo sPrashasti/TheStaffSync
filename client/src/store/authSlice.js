@@ -58,7 +58,7 @@ export const loadSession = createAsyncThunk('auth/loadSession', async (_, { reje
 
 const savedToken = tokenStorage.get();
 
-const signedOut = (state, notice = '') => {
+const signedOut = (state, notice = '', byUser = false) => {
   tokenStorage.clear();
   state.token = null;
   state.user = null;
@@ -66,6 +66,7 @@ const signedOut = (state, notice = '') => {
   state.organisation = null;
   state.status = 'anonymous';
   state.notice = notice;
+  state.signedOutByUser = byUser;
 };
 
 const authSlice = createSlice({
@@ -79,9 +80,11 @@ const authSlice = createSlice({
     status: savedToken ? 'checking' : 'anonymous',
     // Shown on the login page, e.g. after a session expires.
     notice: '',
+    // True after the user chose to log out, so the login page opens quietly rather than prompting.
+    signedOutByUser: false,
   },
   reducers: {
-    logout: (state) => signedOut(state),
+    logout: (state) => signedOut(state, '', true),
     sessionExpired: (state, action) => signedOut(state, action.payload || 'Your session has ended. Please log in again.'),
     clearNotice: (state) => {
       state.notice = '';
@@ -95,6 +98,10 @@ const authSlice = createSlice({
     organisationUpdated: (state, action) => {
       state.organisation = action.payload;
     },
+    // After the user uploads or removes their profile photo (payload: the new photoUpdatedAt).
+    photoChanged: (state, action) => {
+      if (state.user) state.user.photoUpdatedAt = action.payload;
+    },
   },
   extraReducers: (builder) => {
     const signedIn = (state, { payload }) => {
@@ -104,6 +111,7 @@ const authSlice = createSlice({
       state.organisation = payload.organisation;
       state.status = 'authenticated';
       state.notice = '';
+      state.signedOutByUser = false;
     };
     builder
       .addCase(login.fulfilled, signedIn)
@@ -129,7 +137,7 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, sessionExpired, clearNotice, tokenReplaced, organisationUpdated } = authSlice.actions;
+export const { logout, sessionExpired, clearNotice, tokenReplaced, organisationUpdated, photoChanged } = authSlice.actions;
 export default authSlice.reducer;
 
 export const selectAuth = (state) => state.auth;

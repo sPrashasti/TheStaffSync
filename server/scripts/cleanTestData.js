@@ -10,7 +10,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env'), 
 
 const mongoose = require('mongoose');
 const { connectDB, disconnectDB } = require('../config/db');
-const { Organisation, Counter, User, Employee, Attendance, Leave, Notification, Training, Announcement } = require('../models');
+const { Organisation, Counter, User, Employee, Attendance, Leave, Notification, Training, Announcement, ProfilePhoto } = require('../models');
 const { runAsPlatform } = require('../utils/tenantContext');
 
 const TEST_EMAIL = /^postman\+[^@]*@staffsync\.test$/;
@@ -46,6 +46,7 @@ const clean = async (confirmed) => {
     ['leave requests', Leave, byEmployee],
     // Their own notifications, and other people's that point at their leave (e.g. a manager's "New leave request").
     ['notifications', Notification, { $or: [{ recipient: { $in: userIds } }, { 'relatedEntity.entityId': { $in: leaveIds } }] }],
+    ['profile photos', ProfilePhoto, { userId: { $in: userIds } }],
     ['employee profiles', Employee, { _id: { $in: employeeIds } }],
     ['user accounts', User, { _id: { $in: userIds } }],
   ];
@@ -71,7 +72,7 @@ const clean = async (confirmed) => {
     if (remaining === 0) emptied.push(id);
   }
   if (confirmed && emptied.length > 0) {
-    await Promise.all([Announcement, Training, Notification, Attendance, Leave].map((Model) => Model.deleteMany({ organisationId: { $in: emptied } })));
+    await Promise.all([Announcement, Training, Notification, Attendance, Leave, ProfilePhoto].map((Model) => Model.deleteMany({ organisationId: { $in: emptied } })));
     await Counter.deleteMany({ _id: { $in: emptied.map((id) => Counter.employeeIdKey(id)) } });
     await Organisation.deleteMany({ _id: { $in: emptied } });
   }

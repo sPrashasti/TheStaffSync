@@ -1,0 +1,49 @@
+Started: 2026-10-17 01:44:21 IST
+v24.14.1
+
+> staffsync-server@1.0.0 bench
+> node scripts/benchmark.js
+
+Seeded 500 people, 19556 attendance records, 1500 leave requests, 5000 notifications in 29.1s
+
+Endpoint                          status   median     p95     size
+HR dashboard                      200     294 ms  349 ms   1.5 kB
+Manager dashboard                 200     133 ms  148 ms   2.7 kB
+Employee dashboard                200      86 ms  177 ms   1.1 kB
+Attendance summary (month)        200     447 ms  498 ms   3.1 kB
+Attendance summary (60 days)      200     520 ms 1165 ms   3.2 kB
+Leave summary                     200     251 ms  486 ms   1.6 kB
+Department stats                  200     128 ms  376 ms   0.9 kB
+Training summary                  200      78 ms   89 ms  12.8 kB
+Employees list                    200     124 ms  314 ms  10.5 kB
+Employees by role                 200     164 ms  173 ms  10.5 kB
+All attendance                    200     164 ms  338 ms  13.0 kB
+All attendance, one day           200     161 ms  596 ms  13.0 kB
+Team attendance                   200     195 ms  240 ms  13.0 kB
+My attendance                     200      83 ms   98 ms   9.0 kB
+All leave (pending)               200     168 ms  175 ms  14.2 kB
+Team leave                        200     195 ms  206 ms  16.3 kB
+My leave                          200     115 ms  122 ms   1.4 kB
+Trainings                         200     168 ms  189 ms  12.1 kB
+Announcements                     200     117 ms  125 ms   8.0 kB
+Notifications                     200      80 ms   93 ms   2.6 kB
+Health (baseline)                 200       2 ms    3 ms   0.2 kB
+
+Query                               scanned  returned  plan
+  Leave: team, newest first               36        25  SORT < FETCH < IXSCAN
+  Leave: own, newest first                 3         3  SORT < FETCH < IXSCAN
+  Leave: pending, newest first            25        25  LIMIT < FETCH < IXSCAN
+  Leave: approved overlapping a day        0         0  FETCH < IXSCAN
+  Attendance: one day, all                25        25  LIMIT < FETCH < IXSCAN
+  Attendance: team, newest               469        25  SORT < FETCH < IXSCAN
+  Attendance: everyone, newest            25        25  LIMIT < FETCH < IXSCAN
+  Employees: team                         12        12  FETCH < IXSCAN
+  Employees: sorted by code               25        25  LIMIT < FETCH < IXSCAN
+  Users: active                          490       490  PROJECTION_SIMPLE < FETCH < IXSCAN
+  Notifications: own, newest              10        10  SORT < FETCH < IXSCAN
+  Trainings: enrolled                     20        20  SORT < FETCH < IXSCAN
+  Announcements: audience, newest         25        25  LIMIT < FETCH < SORT_MERGE < IXSCAN < IXSCAN
+
+! = reads the whole collection (no index used)
+exit=0
+Finished: 2026-10-17 01:45:44 IST

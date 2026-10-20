@@ -1,11 +1,12 @@
 const dns = require('dns');
 const mongoose = require('mongoose');
 
-// Node on Windows can fall back to 127.0.0.1 as its only DNS server when the
-// system resolver is an IPv6 link-local address, which breaks mongodb+srv:// lookups.
-const isLoopbackOnly = dns.getServers().every((s) => s === '127.0.0.1' || s === '::1');
-if (isLoopbackOnly) {
+// Node on Windows frequently fails mongodb+srv:// lookups with local router DNS.
+// Setting Cloudflare / Google public DNS ensures reliable SRV resolution.
+try {
   dns.setServers(['1.1.1.1', '8.8.8.8']);
+} catch {
+  // Ignore if environment prevents setting DNS servers
 }
 
 // Throw on query filters that use fields not in the schema. With 'true' Mongoose would drop

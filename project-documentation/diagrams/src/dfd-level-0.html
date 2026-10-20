@@ -1,0 +1,43 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>DFD Level 0</title>
+<style>body{margin:0;background:#fff}</style>
+<script src="diagram-engine.js"></script></head>
+<body><script>
+// DFD Level 0 (context diagram): StaffSync as one process and the external entities around it.
+// Flows taken from the API routes (server/routes) and services (notificationService, passwordResetService).
+drawDiagram({
+  width: 1500, height: 960,
+  title: 'DFD Level 0 (Context Diagram) — StaffSync HRMS',
+  subtitle: 'Yourdon–DeMarco notation: rectangles are external entities, the circle is the system',
+  nodes: [
+    { id: 'sys', kind: 'process', x: 750, y: 500, r: 150, label: 'StaffSync\nHR Management\nSystem', num: '0', size: 18 },
+    { id: 'visitor', kind: 'entity', x: 750, y: 130, w: 300, h: 70, label: 'Visitor / Prospective company' },
+    { id: 'emp', kind: 'entity', x: 170, y: 250, w: 230, h: 70, label: 'Employee' },
+    { id: 'mgr', kind: 'entity', x: 170, y: 520, w: 230, h: 70, label: 'Manager' },
+    { id: 'hr', kind: 'entity', x: 170, y: 790, w: 230, h: 70, label: 'HR Administrator' },
+    { id: 'plat', kind: 'entity', x: 1330, y: 290, w: 250, h: 70, label: 'Platform Administrator' },
+    { id: 'smtp', kind: 'entity', x: 1330, y: 720, w: 250, h: 70, label: 'Email Service (SMTP)' },
+  ],
+  edges: [
+    { from: 'visitor', to: 'sys', offset: -26, label: 'Organisation sign-up details,\ndemo sign-in request (role)', lx: 930, ly: 260 },
+    { from: 'sys', to: 'visitor', offset: -26, label: 'New HR account,\nsession token', lx: 650, ly: 330 },
+
+    { from: 'emp', to: 'sys', offset: -26, label: 'Credentials, check-in / check-out,\nleave requests, training enrolment,\ncontact-detail updates', lx: 470, ly: 238 },
+    { from: 'sys', to: 'emp', offset: -26, label: 'Own attendance and leave status,\nannouncements, trainings, notifications', lx: 330, ly: 405 },
+
+    { from: 'mgr', to: 'sys', offset: -26, label: 'Leave decisions (approve / reject + reason),\ntrainings, announcements, team assignments', lx: 450, ly: 452 },
+    { from: 'sys', to: 'mgr', offset: -26, label: 'Team attendance and leave,\nteam dashboard, notifications', lx: 390, ly: 582 },
+
+    { from: 'hr', to: 'sys', offset: -26, label: 'People records, roles, reporting lines,\ncompany settings, leave decisions, content', lx: 205, ly: 650 },
+    { from: 'sys', to: 'hr', offset: -26, label: 'Company dashboard and reports,\nall attendance and leave records', lx: 560, ly: 760 },
+
+    { from: 'plat', to: 'sys', offset: -26, label: 'Rename, suspend (with reason),\nreactivate organisation', lx: 1110, ly: 475 },
+    { from: 'sys', to: 'plat', offset: -26, label: 'Organisation list and usage,\nplatform statistics, audit log', lx: 1060, ly: 320 },
+
+    { from: 'sys', to: 'smtp', label: 'Password reset email\n(single-use link)', lx: 1090, ly: 670 },
+  ],
+  notes: [
+    { x: 40, y: 935, text: 'All users sign in with an email and password and receive a JWT; every later flow carries that token. Source: server/routes/*.js, server/services/*.js (inspected 17 October 2026).', size: 12, color: '#555' },
+  ],
+});
+</script></body></html>

@@ -1,21 +1,21 @@
 import { Box, Card, CardContent, Typography } from '@mui/material';
 import BrandMark from '../../components/BrandMark';
 import ThemeToggle from '../../components/ThemeToggle';
+import { officeScene } from './landing/landingStyles';
 
-// Centred card used by the login and registration pages, on an ivory (light) or sapphire
-// (dark) silk background.
+// Centred card used by the password and platform login pages, on the same office scene as the
+// landing page.
 function AuthCard({ title, subtitle, children }) {
   return (
     <Box
-      sx={{
+      sx={(theme) => ({
+        ...officeScene(theme),
         minHeight: '100vh',
         display: 'grid',
         placeItems: 'center',
         px: 2,
         py: 4,
-        background: 'var(--hero-silk)',
-        position: 'relative',
-      }}
+      })}
     >
       <ThemeToggle sx={{ position: 'absolute', top: 16, right: 16, color: 'var(--hero-text)' }} />
       <Box sx={{ width: '100%', maxWidth: 440 }}>

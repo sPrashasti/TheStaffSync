@@ -24,6 +24,7 @@ const reportRoutes = require('./routes/reportRoutes');
 const announcementRoutes = require('./routes/announcementRoutes');
 const trainingRoutes = require('./routes/trainingRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const profilePhotoRoutes = require('./routes/profilePhotoRoutes');
 
 const app = express();
 
@@ -53,6 +54,7 @@ const routes = [
   ['/api/announcements', announcementRoutes],
   ['/api/trainings', trainingRoutes],
   ['/api/notifications', notificationRoutes],
+  ['/api/profile-photos', profilePhotoRoutes],
 ];
 routes.forEach(([path, router]) => app.use(path, router));
 

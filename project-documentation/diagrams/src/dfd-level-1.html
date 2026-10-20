@@ -1,0 +1,93 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>DFD Level 1</title>
+<style>body{margin:0;background:#fff}</style>
+<script src="diagram-engine.js"></script></head>
+<body><script>
+// DFD Level 1: the processes inside StaffSync and the MongoDB collections (data stores) they use.
+// Processes map to controllers/services; stores map to models in server/models (collection names in brackets).
+drawDiagram({
+  width: 1960, height: 1230,
+  title: 'DFD Level 1 — StaffSync HRMS',
+  subtitle: 'Processes (circles) and data stores (open rectangles = MongoDB collections). Dashed lines are read-only flows for reporting.',
+  nodes: [
+    // External entities
+    { id: 'visitor', kind: 'entity', x: 150, y: 140, w: 220, h: 64, label: 'Visitor /\nProspective company', size: 13 },
+    { id: 'smtp', kind: 'entity', x: 150, y: 330, w: 220, h: 64, label: 'Email Service (SMTP)', size: 13 },
+    { id: 'users', kind: 'entity', x: 150, y: 640, w: 220, h: 220, label: 'Organisation users', sub: 'Employee · Manager · HR\n(permissions by role)' },
+    { id: 'padmin', kind: 'entity', x: 1720, y: 150, w: 240, h: 64, label: 'Platform Administrator', size: 13 },
+
+    // Processes
+    { id: 'p1', kind: 'process', x: 560, y: 210, r: 82, num: '1.0', label: 'Authenticate\n& manage\nsessions' },
+    { id: 'p2', kind: 'process', x: 1000, y: 210, r: 82, num: '2.0', label: 'Onboard &\nconfigure\norganisation' },
+    { id: 'p4', kind: 'process', x: 560, y: 470, r: 82, num: '4.0', label: 'Record\nattendance' },
+    { id: 'p6', kind: 'process', x: 1000, y: 470, r: 82, num: '6.0', label: 'Publish\nannouncements\n& training' },
+    { id: 'p5', kind: 'process', x: 560, y: 730, r: 82, num: '5.0', label: 'Process\nleave' },
+    { id: 'p7', kind: 'process', x: 1000, y: 730, r: 82, num: '7.0', label: 'Notify\nusers' },
+    { id: 'p3', kind: 'process', x: 560, y: 1000, r: 82, num: '3.0', label: 'Manage\npeople' },
+    { id: 'p8', kind: 'process', x: 1000, y: 1000, r: 82, num: '8.0', label: 'Produce\ndashboards\n& reports' },
+    { id: 'p9', kind: 'process', x: 1720, y: 470, r: 82, num: '9.0', label: 'Administer\nplatform' },
+
+    // Data stores
+    { id: 'd1', kind: 'store', x: 780, y: 210, w: 190, h: 44, num: 'D1', label: 'Users (users)' },
+    { id: 'd2', kind: 'store', x: 1390, y: 210, w: 230, h: 44, num: 'D2', label: 'Organisations' },
+    { id: 'd4', kind: 'store', x: 780, y: 395, w: 190, h: 44, num: 'D4', label: 'Attendance' },
+    { id: 'd6', kind: 'store', x: 1390, y: 420, w: 230, h: 44, num: 'D6', label: 'Announcements' },
+    { id: 'd7', kind: 'store', x: 1390, y: 520, w: 230, h: 44, num: 'D7', label: 'Trainings' },
+    { id: 'd5', kind: 'store', x: 780, y: 820, w: 190, h: 44, num: 'D5', label: 'Leave requests' },
+    { id: 'd8', kind: 'store', x: 1390, y: 730, w: 230, h: 44, num: 'D8', label: 'Notifications' },
+    { id: 'd3', kind: 'store', x: 780, y: 930, w: 190, h: 44, num: 'D3', label: 'Employees' },
+    { id: 'd1b', kind: 'store', x: 780, y: 1080, w: 190, h: 44, num: 'D1', label: 'Users (repeated)' },
+    { id: 'd4b', kind: 'store', x: 1250, y: 960, w: 210, h: 44, num: 'D4', label: 'Attendance (repeated)', size: 12 },
+    { id: 'd7b', kind: 'store', x: 1250, y: 1050, w: 210, h: 44, num: 'D7', label: 'Trainings (repeated)', size: 12 },
+    { id: 'd9', kind: 'store', x: 1610, y: 880, w: 210, h: 44, num: 'D9', label: 'Platform admins' },
+    { id: 'd10', kind: 'store', x: 1840, y: 880, w: 200, h: 44, num: 'D10', label: 'Audit log' },
+  ],
+  edges: [
+    // Visitor
+    { from: 'visitor', to: 'p2', via: [{ x: 560, y: 98 }, { x: 1000, y: 98 }], label: 'Organisation sign-up (company, name, email, password)', lx: 790, ly: 98 },
+    { from: 'visitor', to: 'p1', label: 'Demo sign-in (role)', lx: 360, ly: 150 },
+    // Authentication
+    { from: 'users', to: 'p1', both: true, label: 'Credentials /\nsession token (JWT)', lx: 395, ly: 395 },
+    { from: 'p1', to: 'smtp', label: 'Reset link email', lx: 345, ly: 283 },
+    { from: 'p1', to: 'd1', both: true, label: '', },
+    { from: 'p1', to: 'd2', via: [{ x: 640, y: 300 }, { x: 1300, y: 300 }], dashed: true, label: 'Organisation status (active / suspended)', lx: 1160, ly: 300 },
+    // Organisation
+    { from: 'p2', to: 'd2', both: true, label: 'Organisation, settings', lx: 1190, ly: 180 },
+    { from: 'p2', to: 'd1', label: 'First HR account', lx: 890, ly: 160 },
+    // Attendance
+    { from: 'users', to: 'p4', label: 'Check-in / check-out', lx: 400, ly: 520 },
+    { from: 'p4', to: 'd4', both: true, label: '', },
+    // Announcements and training
+    { from: 'users', to: 'p6', via: [{ x: 560, y: 572 }], label: 'Announcements, trainings, enrolment, assignments', lx: 760, ly: 548 },
+    { from: 'p6', to: 'd6', both: true, label: '' },
+    { from: 'p6', to: 'd7', both: true, label: '' },
+    { from: 'p6', to: 'p7', label: 'Announcement / training\nevents', lx: 1085, ly: 600 },
+    // Leave
+    { from: 'users', to: 'p5', both: true, label: 'Leave request, decision /\nleave status', lx: 380, ly: 765 },
+    { from: 'p5', to: 'd5', both: true, label: '' },
+    { from: 'p5', to: 'p7', label: 'Leave requested / decided', lx: 790, ly: 715 },
+    // Notifications
+    { from: 'p7', to: 'd8', both: true, label: '' },
+    { from: 'p7', to: 'users', via: [{ x: 790, y: 615 }], label: 'Notifications', lx: 700, ly: 620 },
+    // People
+    { from: 'users', to: 'p3', both: true, label: 'People records, roles (HR);\nown contact details', lx: 330, ly: 905 },
+    { from: 'p3', to: 'd3', both: true, label: '' },
+    { from: 'p3', to: 'd1b', both: true, label: '' },
+    // Reporting
+    { from: 'p8', to: 'users', via: [{ x: 900, y: 872 }, { x: 180, y: 872 }], label: 'Dashboards and reports', lx: 660, ly: 872 },
+    { from: 'd3', to: 'p8', dashed: true, label: '' },
+    { from: 'd5', to: 'p8', dashed: true, label: '' },
+    { from: 'd4b', to: 'p8', dashed: true, label: '' },
+    { from: 'd7b', to: 'p8', dashed: true, label: '' },
+    // Platform
+    { from: 'padmin', to: 'p9', both: true, label: 'Credentials; rename, suspend,\nreactivate / statistics, audit log', lx: 1720, ly: 300 },
+    { from: 'p9', to: 'd2', both: true, label: 'Status, name, usage', lx: 1560, ly: 330 },
+    { from: 'p9', to: 'd9', both: true, label: '' },
+    { from: 'p9', to: 'd10', label: '' },
+  ],
+  notes: [
+    { x: 40, y: 1175, text: 'Every organisation-owned store (D1, D3–D8) is filtered by organisationId on every query (tenantScoped plugin). D2, D9 and D10 are platform-level. Employee numbers (EMP0001…) come from a small counters collection, not shown.', size: 12 },
+    { x: 40, y: 1200, text: 'Sources: server/routes, server/controllers, server/services, server/models (inspected 17 October 2026).', size: 12 },
+  ],
+});
+</script></body></html>

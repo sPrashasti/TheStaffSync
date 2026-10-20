@@ -2,7 +2,6 @@ import { useState } from 'react';
 import {
   Alert,
   AppBar,
-  Avatar,
   Box,
   Divider,
   Drawer,
@@ -27,13 +26,13 @@ import { NavLink, Outlet } from 'react-router-dom';
 import BrandMark from '../components/BrandMark';
 import NotificationBell from '../components/NotificationBell';
 import ThemeToggle from '../components/ThemeToggle';
+import UserAvatar from '../components/UserAvatar';
 import { logout, selectOrganisation, selectUser } from '../store/authSlice';
 import { DISPLAY_TIME_ZONES, selectDisplayTimeZone, setDisplayTimeZone } from '../store/preferencesSlice';
 import { NAVIGATION, ROLE_LABELS } from '../routes/navigation';
 
 const DRAWER_WIDTH = 240;
 
-const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
 
 // Signed-in shell: top bar, role menu (permanent on desktop, slide-out on mobile) and the page.
 function AppLayout() {
@@ -137,7 +136,7 @@ function AppLayout() {
           <NotificationBell />
 
           <IconButton onClick={(e) => setUserMenu(e.currentTarget)} aria-label="Account menu">
-            <Avatar sx={{ width: 34, height: 34, background: 'var(--metal)', color: 'var(--on-metal)', fontSize: 14, fontWeight: 700 }}>{initials(user.name)}</Avatar>
+            <UserAvatar userId={user._id} name={user.name} photoUpdatedAt={user.photoUpdatedAt} size={34} />
           </IconButton>
           <Menu anchorEl={userMenu} open={Boolean(userMenu)} onClose={() => setUserMenu(null)}>
             <Box sx={{ px: 2, py: 1 }}>

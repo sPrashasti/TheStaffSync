@@ -6,6 +6,7 @@ const { connectDB, disconnectDB } = require('./config/db');
 const { allowedOrigins } = require('./config/cors');
 const { assertJwtConfig } = require('./utils/token');
 const { assertProductionConfig } = require('./config/security');
+const { senderProblem } = require('./utils/mailer');
 const { assertTimeZone, getTimeZone, assertWorkingDays, getWorkingDayNames } = require('./utils/dates');
 
 // Registers every model so Mongoose builds their indexes on connect.
@@ -37,6 +38,8 @@ const start = async () => {
     console.log(`CORS allowed origins: ${allowedOrigins.join(', ') || '(none configured)'}`);
     console.log(`Default time zone for new organisations: ${getTimeZone()}`);
     console.log(`Default working days: ${getWorkingDayNames().join(', ')}`);
+    const mailWarning = senderProblem();
+    if (mailWarning) console.warn(`Warning: password reset emails will not be delivered. ${mailWarning}`);
     if (process.env.NODE_ENV !== 'production') {
       console.log(`Mounted routes: ${mountedPaths.join(', ')}`);
     }

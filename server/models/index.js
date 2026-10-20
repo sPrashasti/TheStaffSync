@@ -10,6 +10,7 @@ const Announcement = require('./Announcement');
 const Training = require('./Training');
 const Notification = require('./Notification');
 const Counter = require('./Counter');
+const ProfilePhoto = require('./ProfilePhoto');
 
 module.exports = {
   Organisation,
@@ -23,4 +24,5 @@ module.exports = {
   Training,
   Notification,
   Counter,
+  ProfilePhoto,
 };

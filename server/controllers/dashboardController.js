@@ -15,7 +15,7 @@ const RECENT_LIMIT = 5;
 const withApplicant = {
   path: 'employeeId',
   select: 'employeeId department designation userId',
-  populate: { path: 'userId', select: 'name email' },
+  populate: { path: 'userId', select: 'name email photoUpdatedAt' },
 };
 
 // Approved leave days falling inside [from, to].
@@ -118,7 +118,7 @@ const getManagerDashboard = async (req, res) => {
   const members = team.map((e) => {
     const s = statuses.get(String(e._id));
     return {
-      employee: { _id: e._id, employeeId: e.employeeId, name: e.userId.name, designation: e.designation },
+      employee: { _id: e._id, employeeId: e.employeeId, name: e.userId.name, designation: e.designation, userId: e.userId },
       date: s.date,
       status: s.status,
       checkIn: s.record ? s.record.checkIn : null,
@@ -156,7 +156,7 @@ const getHrDashboard = async (req, res) => {
       .sort({ joiningDate: -1 })
       .limit(RECENT_LIMIT)
       .select('employeeId department designation joiningDate userId')
-      .populate('userId', 'name email'),
+      .populate('userId', 'name email photoUpdatedAt'),
     Employee.countDocuments({ _id: { $in: activeIds }, joiningDate: { $gte: monthStart } }),
     Training.countDocuments({ startDate: { $gt: todayDate } }),
     Training.countDocuments({ startDate: { $lte: todayDate }, endDate: { $gte: todayDate } }),

@@ -8,9 +8,13 @@ import { homePathFor } from './navigation';
 // Logged-in users only; others go to /login and come back afterwards.
 // This is for convenience; the API enforces every permission itself.
 export function RequireAuth() {
-  const { status } = useSelector(selectAuth);
+  const { status, signedOutByUser } = useSelector(selectAuth);
   const location = useLocation();
-  if (status !== 'authenticated') return <Navigate to="/login" replace state={{ from: location }} />;
+  if (status !== 'authenticated') {
+    // Remember the page only when the visitor was sent here; not for the site address or after logging out.
+    const remember = !signedOutByUser && location.pathname !== '/';
+    return <Navigate to="/login" replace state={remember ? { from: location } : undefined} />;
+  }
   return <Outlet />;
 }
 

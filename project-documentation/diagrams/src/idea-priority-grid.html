@@ -1,0 +1,54 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Idea prioritisation</title>
+<style>body{margin:0;background:#fff}</style>
+<script src="canvas-kit.js"></script></head>
+<body><script>
+// Importance × feasibility grid. Positions are a retrospective judgement; colour shows what was
+// built (git history, phases 1–21) and what is still open (README "Known limitations").
+const IDEAS = [
+  // [label, feasibility 0..1, importance 0..1, built?]
+  ['Leave apply & approve workflow', 0.70, 0.96, true],
+  ['Role-based access (E / M / HR)', 0.78, 0.92, true],
+  ['Check-in / check-out', 0.88, 0.86, true],
+  ['HR-managed accounts, reporting lines', 0.74, 0.84, true],
+  ['In-app notifications', 0.80, 0.74, true],
+  ['Role dashboards', 0.66, 0.76, true],
+  ['HR reports', 0.56, 0.70, true],
+  ['Announcements by audience', 0.90, 0.58, true],
+  ['Training with seats & enrolment', 0.62, 0.55, true],
+  ['Multi-company isolation', 0.36, 0.82, true],
+  ['Public demo, nightly reset', 0.48, 0.42, true],
+  ['Platform admin console', 0.46, 0.50, true],
+  ['Per-employee time zones', 0.52, 0.38, true],
+  ['Leave balances & allowances', 0.50, 0.68, false],
+  ['Public-holiday calendar', 0.66, 0.60, false],
+  ['Employee cancels own leave', 0.86, 0.46, false],
+  ['Email notifications', 0.70, 0.40, false],
+  ['Plans & billing', 0.30, 0.48, false],
+  ['Performance reviews', 0.28, 0.40, false],
+  ['Native mobile app', 0.14, 0.34, false],
+  ['Payroll', 0.10, 0.30, false],
+];
+const W = 1500, H = 1100, L = 150, T = 110, S = 860;
+const c = makeCanvas(W, H, 'Idea Prioritisation — Importance × Feasibility', 'Retrospective placement. Blue = built (phases 1–21); amber = not built yet.');
+const X = (f) => L + f * S, Y = (imp) => T + (1 - imp) * S;
+c.add(c.el('rect', { x: X(0.5), y: T, width: S / 2, height: S / 2, fill: '#eef6ee' }));
+c.add(c.el('line', { x1: X(0.5), y1: T, x2: X(0.5), y2: T + S, stroke: '#c9d1dc', 'stroke-dasharray': '6 5' }));
+c.add(c.el('line', { x1: L, y1: Y(0.5), x2: L + S, y2: Y(0.5), stroke: '#c9d1dc', 'stroke-dasharray': '6 5' }));
+c.add(c.el('line', { x1: L, y1: T + S, x2: L + S + 10, y2: T + S, stroke: '#333', 'stroke-width': 2 }));
+c.add(c.el('line', { x1: L, y1: T + S, x2: L, y2: T - 10, stroke: '#333', 'stroke-width': 2 }));
+c.text('Feasibility (effort, complexity, dependencies) →', L + S / 2, T + S + 44, { size: 15, weight: 700, anchor: 'middle', maxWidth: 600 });
+const ylab = c.el('text', { x: 0, y: 0, 'font-size': 15, 'font-weight': 700, 'text-anchor': 'middle', transform: `translate(${L - 60}, ${T + S / 2}) rotate(-90)`, 'font-family': 'Segoe UI, Calibri, Arial, sans-serif' }, 'Importance (value to HR, managers, employees) →');
+c.add(ylab);
+[['Do first: high importance, feasible', 0.75, 0.985], ['Plan carefully: high importance, harder', 0.25, 0.985], ['Quick wins: lower importance, easy', 0.75, 0.035], ['Later / not now', 0.25, 0.035]].forEach(([t, f, i]) => c.text(t, X(f), Y(i), { size: 13, weight: 700, color: '#6b7a90', anchor: 'middle', maxWidth: 400 }));
+IDEAS.forEach(([label, f, imp, built]) => {
+  c.add(c.el('circle', { cx: X(f), cy: Y(imp), r: 8, fill: built ? '#2f5fa8' : '#d48a1a', stroke: '#fff', 'stroke-width': 2 }));
+  c.text(label, X(f) + 13, Y(imp) + 4, { size: 12.5, maxWidth: 260 });
+});
+// Legend
+c.add(c.el('circle', { cx: L + S + 60, cy: T + 20, r: 8, fill: '#2f5fa8' }));
+c.text('Built', L + S + 76, T + 25, { size: 14 });
+c.add(c.el('circle', { cx: L + S + 60, cy: T + 50, r: 8, fill: '#d48a1a' }));
+c.text('Not built yet', L + S + 76, T + 55, { size: 14 });
+c.text('Built items come from the git history (6–8 Oct 2026). Open items come from the README “Known limitations”, except performance reviews, mobile app and payroll, which are ideas never started.', L + S + 50, T + 100, { size: 12.5, color: '#555', maxWidth: 300 });
+</script></body></html>

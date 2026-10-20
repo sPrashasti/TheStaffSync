@@ -1,0 +1,59 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Solution architecture</title>
+<style>body{margin:0;background:#fff}</style>
+<script src="diagram-engine.js"></script></head>
+<body><script>
+// StaffSync solution architecture, drawn from server/app.js, server/server.js, server/config,
+// server/middleware, client/package.json, render.yaml and .github/workflows/ci.yml.
+const chain = [
+  ['CORS allow-list', 'only origins in CLIENT_URL (config/cors.js)'],
+  ['Security headers, rate limit, no-store, repeated-query check', 'helmet · express-rate-limit · Cache-Control: no-store (config/security.js)'],
+  ['JSON body parser', 'express.json, 10 kB limit'],
+  ['Route table', '13 route groups · 65 endpoints (routes/*.js)'],
+  ['protect / protectPlatform', 'JWT HS256 · active account and organisation · tenant context'],
+  ['authorize(roles)', 'Employee · Manager · HR, per route'],
+  ['Request validation', 'express-validator: field whitelist, types (validators/*.js)'],
+  ['Controllers', 'business rules: leave, attendance, people, training…'],
+  ['Services', 'notifications · statistics · password reset · demo'],
+  ['Mongoose models + tenantScoped plugin', 'every query limited to the caller’s organisation'],
+  ['Central error handler', '{ success: false, message, errors } (middleware/errorMiddleware.js)'],
+];
+const nodes = [
+  { id: 'u1', kind: 'entity', x: 180, y: 250, w: 250, h: 80, label: 'Organisation users', sub: 'Employee · Manager · HR' },
+  { id: 'u2', kind: 'entity', x: 180, y: 400, w: 250, h: 80, label: 'Visitor', sub: 'organisation sign-up · public demo' },
+  { id: 'u3', kind: 'entity', x: 180, y: 550, w: 250, h: 80, label: 'Platform administrator', sub: 'separate account type' },
+  { id: 'spa', kind: 'box', x: 880, y: 170, w: 880, h: 74, label: 'React single-page application (static build, served by the same service)', sub: 'React 19 · Vite 8 · MUI 9 · Redux Toolkit · React Router 7 · Axios (one client per account type)', fill: '#eef6ee' },
+  { id: 'startup', kind: 'box', x: 1225, y: 330, w: 270, h: 92, label: 'Start-up checks', sub: 'JWT secret ≥ 32 characters,\nCORS origins in production,\ntime zone, working days', size: 13, fill: '#fbfbf6' },
+  { id: 'timer', kind: 'box', x: 1225, y: 660, w: 270, h: 92, label: 'Nightly demo reset', sub: 'runs inside this process at 03:00\nin the demo organisation’s time\nzone (services/demoService.js)', size: 13, fill: '#fbfbf6' },
+  { id: 'db', kind: 'box', x: 1645, y: 440, w: 400, h: 520, label: 'MongoDB', sub: 'Atlas cluster (MONGO_URI); a mongo:7 replica\nset in CI. Transactions need a replica set.\n\nOrganisation-owned collections:\nusers · employees · attendance · leaves\nannouncements · trainings · notifications\n\nPlatform-level collections:\norganisations · platformadmins\nplatformauditlogs · counters', fill: '#fff8ec', stroke: '#9a6b1f' },
+  { id: 'smtp', kind: 'entity', x: 1645, y: 860, w: 400, h: 80, label: 'Email service (SMTP)', sub: 'Nodemailer · password-reset emails only' },
+  { id: 'gh', kind: 'box', x: 640, y: 1050, w: 300, h: 70, label: 'GitHub repository', fill: '#f3f0fa' },
+  { id: 'ci', kind: 'box', x: 1100, y: 1050, w: 440, h: 70, label: 'GitHub Actions CI (.github/workflows/ci.yml)', sub: 'client: lint, tests, build · server: tests on mongo:7', size: 13, fill: '#f3f0fa' },
+  { id: 'render', kind: 'box', x: 1610, y: 1050, w: 470, h: 70, label: 'Render blueprint (render.yaml)', sub: 'one web service · auto-deploy on push · health check /api/health', size: 13, fill: '#f3f0fa' },
+];
+chain.forEach(([label, sub], i) => nodes.push({ id: `c${i}`, kind: 'box', x: 760, y: 290 + i * 62, w: 560, h: 50, label, sub, size: 13 }));
+const edges = [
+  { from: 'u1', to: 'spa', via: [{ x: 352, y: 250 }, { x: 352, y: 170 }], label: 'HTTPS', lx: 352, ly: 142 },
+  { from: 'u2', to: 'spa', via: [{ x: 352, y: 400 }, { x: 352, y: 170 }], label: '' },
+  { from: 'u3', to: 'spa', via: [{ x: 352, y: 550 }, { x: 352, y: 170 }], label: '' },
+  { from: 'spa', to: 'c0', label: 'REST over HTTPS · JSON · Authorization: Bearer <JWT>', lx: 760, ly: 238 },
+  ...chain.slice(1).map((_, i) => ({ from: `c${i}`, to: `c${i + 1}`, label: '' })),
+  { from: 'c9', to: 'db', via: [{ x: 1060, y: 848 }, { x: 1060, y: 520 }, { x: 1440, y: 520 }], label: 'queries scoped by organisationId', lx: 1250, ly: 520 },
+  { from: 'c8', to: 'smtp', via: [{ x: 1400, y: 786 }, { x: 1400, y: 860 }], label: 'reset email', lx: 1250, ly: 786 },
+  { from: 'gh', to: 'ci', label: 'push / pull request', lx: 880, ly: 1030 },
+  { from: 'gh', to: 'render', via: [{ x: 640, y: 1125 }, { x: 1610, y: 1125 }], label: 'auto-deploy on push (does not wait for CI)', lx: 1120, ly: 1125 },
+];
+drawDiagram({
+  width: 1900, height: 1160,
+  title: 'StaffSync — Solution Architecture',
+  subtitle: 'Three tiers: React client · Express 5 API (Node.js 24) · MongoDB. Deployed as one Render web service that serves both the API and the built app.',
+  groups: [
+    { x: 30, y: 110, w: 300, h: 560, label: 'Users (web browser)' },
+    { x: 370, y: 110, w: 1010, h: 860, label: 'Render web service — one Node.js process (API + static React build)', fill: '#f4f7fc' },
+    { x: 1420, y: 110, w: 450, h: 860, label: 'Data and integrations', fill: '#fffdf7' },
+    { x: 370, y: 990, w: 1500, h: 155, label: 'Delivery', fill: '#faf9fd', dashed: true },
+  ],
+  nodes,
+  edges,
+});
+</script></body></html>

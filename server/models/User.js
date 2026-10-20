@@ -38,6 +38,12 @@ const userSchema = new mongoose.Schema(
       type: Date,
       select: false,
     },
+    // When the profile photo last changed (null: no photo). The image itself is in ProfilePhoto;
+    // the app uses this to know whether to fetch it and when its copy is out of date.
+    photoUpdatedAt: {
+      type: Date,
+      default: null,
+    },
     // Soft delete: deactivated users keep their history but cannot log in.
     isActive: {
       type: Boolean,

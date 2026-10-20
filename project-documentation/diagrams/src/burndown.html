@@ -1,0 +1,40 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Burndown</title>
+<style>body{margin:0;background:#fff}</style>
+<script src="canvas-kit.js"></script></head>
+<body><script>
+// Release burndown across the four iterations. Story points are retrospective estimates (none were
+// recorded during development); completion times come from the git commit history.
+const TOTAL = 138;
+const POINTS = [
+  // [label, remaining after this point]
+  ['Start\n6 Oct', TOTAL],
+  ['Iteration 1\nend 6 Oct 23:13', 133],
+  ['Iteration 2\nend 7 Oct 14:50', 77],
+  ['Iteration 3\nend 7 Oct 17:05', 30],
+  ['Iteration 4\nend 8 Oct 13:18', 0],
+];
+const W = 1300, H = 760, L = 110, T = 110, PW = 1080, PH = 520;
+const c = makeCanvas(W, H, 'Release Burndown — StaffSync (retrospective)', 'Story points estimated after the event; dates and completion from git history. Total 138 points.');
+const X = (i) => L + (i / (POINTS.length - 1)) * PW, Y = (v) => T + PH - (v / TOTAL) * PH;
+for (let v = 0; v <= TOTAL; v += 20) {
+  c.add(c.el('line', { x1: L, y1: Y(v), x2: L + PW, y2: Y(v), stroke: '#e5e9f0' }));
+  c.text(String(v), L - 14, Y(v) + 4, { size: 12, anchor: 'end', color: '#555' });
+}
+c.add(c.el('line', { x1: L, y1: T + PH, x2: L + PW, y2: T + PH, stroke: '#333', 'stroke-width': 2 }));
+c.add(c.el('line', { x1: L, y1: T, x2: L, y2: T + PH, stroke: '#333', 'stroke-width': 2 }));
+c.add(c.el('line', { x1: X(0), y1: Y(TOTAL), x2: X(POINTS.length - 1), y2: Y(0), stroke: '#9aa7bd', 'stroke-width': 2, 'stroke-dasharray': '8 6' }));
+c.add(c.el('polyline', { points: POINTS.map(([, v], i) => `${X(i)},${Y(v)}`).join(' '), fill: 'none', stroke: '#2f5fa8', 'stroke-width': 3 }));
+POINTS.forEach(([label, v], i) => {
+  c.add(c.el('circle', { cx: X(i), cy: Y(v), r: 6, fill: '#2f5fa8' }));
+  c.text(`${v}`, X(i) + 10, Y(v) - 10, { size: 13, weight: 700, color: '#2f5fa8' });
+  label.split('\n').forEach((line, k) => c.text(line, X(i), T + PH + 26 + k * 17, { size: 12.5, anchor: 'middle', maxWidth: 220, weight: k === 0 ? 700 : 400 }));
+});
+const yl = c.el('text', { 'font-size': 14, 'font-weight': 700, 'text-anchor': 'middle', transform: `translate(40, ${T + PH / 2}) rotate(-90)`, 'font-family': 'Segoe UI, Calibri, Arial, sans-serif' }, 'Story points remaining');
+c.add(yl);
+c.add(c.el('line', { x1: L + PW - 300, y1: T + 10, x2: L + PW - 260, y2: T + 10, stroke: '#2f5fa8', 'stroke-width': 3 }));
+c.text('Actual remaining', L + PW - 250, T + 15, { size: 13 });
+c.add(c.el('line', { x1: L + PW - 300, y1: T + 36, x2: L + PW - 260, y2: T + 36, stroke: '#9aa7bd', 'stroke-width': 2, 'stroke-dasharray': '8 6' }));
+c.text('Ideal (even spread)', L + PW - 250, T + 41, { size: 13 });
+c.text('The x-axis marks iteration ends, not equal time intervals.', L, H - 20, { size: 12, color: '#555', maxWidth: 1000 });
+</script></body></html>

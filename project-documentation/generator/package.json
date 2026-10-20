@@ -1,0 +1,6 @@
+{
+  "name": "staffsync-documentation-generator",
+  "private": true,
+  "description": "Builds the StaffSync project documents (.docx) and diagrams. Not part of the application.",
+  "dependencies": { "docx": "^9.0.0" }
+}

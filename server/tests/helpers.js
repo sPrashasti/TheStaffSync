@@ -7,6 +7,9 @@
 const path = require('path');
 
 require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
+// Tests must never send real email, whatever .env holds: without SMTP settings, messages go to an
+// in-memory outbox (utils/mailer.js) that the tests read.
+for (const key of ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_SECURE', 'MAIL_FROM']) delete process.env[key];
 
 const mongoose = require('mongoose');
 

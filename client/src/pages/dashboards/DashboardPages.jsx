@@ -29,6 +29,7 @@ import GreetingBanner from '../../components/GreetingBanner';
 import StatCard, { StatGrid } from '../../components/StatCard';
 import StatusChip from '../../components/StatusChip';
 import TableMessage from '../../components/TableMessage';
+import UserAvatar from '../../components/UserAvatar';
 import { useApi } from '../../hooks/useApi';
 import { getEmployeeDashboard, getHrDashboard, getManagerDashboard } from '../../services/dashboardService';
 import { selectUser } from '../../store/authSlice';
@@ -89,7 +90,17 @@ export function ManagerDashboard() {
                         {data.team.members.length === 0 && <TableMessage colSpan={4}>No one reports to you yet.</TableMessage>}
                         {data.team.members.map((m) => (
                           <TableRow key={m.employee._id}>
-                            <TableCell>{m.employee.name}</TableCell>
+                            <TableCell>
+                              <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+                                <UserAvatar
+                                  userId={m.employee.userId?._id || m.employee.userId}
+                                  name={m.employee.name}
+                                  photoUpdatedAt={m.employee.userId?.photoUpdatedAt}
+                                  size={28}
+                                />
+                                <Typography variant="body2" sx={{ fontWeight: 600 }}>{m.employee.name}</Typography>
+                              </Stack>
+                            </TableCell>
                             <TableCell><StatusChip status={m.status} /></TableCell>
                             <TableCell>{formatTime(m.checkIn, displayTimeZone)}</TableCell>
                             <TableCell>{formatTime(m.checkOut, displayTimeZone)}</TableCell>
@@ -109,7 +120,17 @@ export function ManagerDashboard() {
                         {data.pendingLeave.oldest.length === 0 && <TableMessage colSpan={3}>Nothing to review.</TableMessage>}
                         {data.pendingLeave.oldest.map((l) => (
                           <TableRow key={l._id}>
-                            <TableCell>{l.employeeId?.userId?.name}</TableCell>
+                            <TableCell>
+                              <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+                                <UserAvatar
+                                  userId={l.employeeId?.userId?._id}
+                                  name={l.employeeId?.userId?.name}
+                                  photoUpdatedAt={l.employeeId?.userId?.photoUpdatedAt}
+                                  size={26}
+                                />
+                                <Typography variant="body2">{l.employeeId?.userId?.name}</Typography>
+                              </Stack>
+                            </TableCell>
                             <TableCell>{leaveTypeLabel(l.leaveType)}</TableCell>
                             <TableCell>{formatDayRange(l.startDate, l.endDate)}</TableCell>
                           </TableRow>
@@ -166,7 +187,17 @@ export function HrDashboard() {
                     <TableBody>
                       {data.recentJoiners.map((e) => (
                         <TableRow key={e._id}>
-                          <TableCell>{e.userId?.name}</TableCell>
+                          <TableCell>
+                            <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+                              <UserAvatar
+                                userId={e.userId?._id}
+                                name={e.userId?.name}
+                                photoUpdatedAt={e.userId?.photoUpdatedAt}
+                                size={28}
+                              />
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>{e.userId?.name}</Typography>
+                            </Stack>
+                          </TableCell>
                           <TableCell>{e.employeeId}</TableCell>
                           <TableCell>{e.department}</TableCell>
                           <TableCell>{e.designation}</TableCell>

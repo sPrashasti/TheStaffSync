@@ -1,0 +1,39 @@
+Started: 2026-10-17 01:44:07 IST
+
+> staffsync-client@1.0.0 test
+> node --test "src/**/*.test.js"
+
+▶ calendar dates
+  ✔ formats British style and never shifts the day (42.9984ms)
+  ✔ collapses single-day ranges (1.0963ms)
+✔ calendar dates (45.9411ms)
+▶ times
+  ✔ uses the 24-hour clock in the chosen time zone (1.3188ms)
+  ✔ formats date and time together, which can move the date (0.8902ms)
+  ✔ works out today in a time zone (2.3174ms)
+  ✔ labels time zones and falls back to the name (1.1744ms)
+✔ times (6.2376ms)
+▶ small helpers
+  ✔ formats hours and labels (0.5384ms)
+✔ small helpers (0.844ms)
+▶ password policy (mirrors the server)
+  ✔ applies the same rules as the API (0.5115ms)
+✔ password policy (mirrors the server) (0.7867ms)
+ℹ tests 8
+ℹ suites 4
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 250.309
+exit=0
+--- lint
+> staffsync-client@1.0.0 lint
+> oxlint
+
+--- build
+dist/assets/index-Blew_xM5.js                      423.10 kB │ gzip: 130.68 kB
+
+[32m✓ built in 749ms[39m
+Finished: 2026-10-17 01:44:13 IST

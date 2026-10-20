@@ -33,7 +33,7 @@ const activeEmployees = (filter = {}) => Employee.aggregate([
       localField: 'userId',
       foreignField: '_id',
       as: 'user',
-      pipeline: [{ $match: { isActive: true } }, { $project: { name: 1, email: 1, role: 1 } }],
+      pipeline: [{ $match: { isActive: true } }, { $project: { name: 1, email: 1, role: 1, photoUpdatedAt: 1 } }],
     },
   },
   { $unwind: '$user' },

@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Problem statements</title>
+<style>body{margin:0;background:#fff}</style>
+<script src="canvas-kit.js"></script></head>
+<body><script>
+// Customer problem statement canvas: one row per StaffSync role, five columns as in the template.
+const COLS = ['I am', 'I’m trying to', 'But', 'Because', 'Which makes me feel'];
+const FILLS = ['#fde68a', '#93c5fd', '#bfdbfe', '#86efac', '#fdba74'];
+const ROWS = [
+  ['PS-1', 'An HR administrator responsible for the whole company’s people records', 'keep attendance and leave records accurate and up to date', 'the records are spread across spreadsheets, emails and paper', 'nothing captures attendance and leave at the moment they happen', 'overloaded, and unsure whether the figures I report are right'],
+  ['PS-2', 'A manager with a team of direct reports', 'decide my team’s leave quickly and know who is working today', 'requests reach me by email and chat and are easy to miss', 'there is no shared queue of requests and no status anyone can see', 'frustrated, and blamed for decisions I never saw'],
+  ['PS-3', 'An employee', 'apply for leave and know the outcome so I can plan', 'I hear nothing until I chase my manager or HR', 'a request has no visible status and no recorded reason when refused', 'anxious and unable to make plans'],
+];
+const W = 1890, colW = 330, labelW = 120, x0 = 30, rowH = 210, topY = 140;
+const c = makeCanvas(W, topY + ROWS.length * (rowH + 20) + 60, 'Customer Problem Statement Canvas — StaffSync', 'Assumption-based: written from the problems StaffSync’s features address, not from recorded user research.');
+COLS.forEach((col, i) => {
+  const x = x0 + labelW + i * (colW + 12);
+  c.box(x, 90, colW, ROWS.length * (rowH + 20) + 40, { fill: '#f6f7f9', stroke: '#d4d9e2', rx: 6 });
+  c.text(col, x + 14, 116, { size: 16, weight: 700, color: '#333' });
+});
+ROWS.forEach((row, r) => {
+  const y = topY + r * (rowH + 20);
+  c.text(row[0], x0 + 10, y + rowH / 2, { size: 20, weight: 700, color: '#1b2a41' });
+  row.slice(1).forEach((txt, i) => {
+    const x = x0 + labelW + i * (colW + 12) + 18;
+    c.sticky(x, y + 8, colW - 36, rowH - 16, txt, FILLS[i], { size: 15 });
+  });
+});
+</script></body></html>

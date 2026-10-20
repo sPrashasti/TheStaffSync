@@ -23,6 +23,7 @@ import { selectOrganisation } from '../../store/authSlice';
 import { formatDay } from '../../utils/format';
 import { ROLES } from '../../utils/labels';
 import ChangePasswordDialog from './ChangePasswordDialog';
+import ProfilePhotoSection from './ProfilePhotoSection';
 
 function Row({ label, value }) {
   return (
@@ -87,8 +88,8 @@ function ProfilePage() {
         {data && (
           <Card variant="outlined">
             <CardContent>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>{data.userId.name}</Typography>
-              <Typography color="text.secondary">{data.designation} · {data.department}</Typography>
+              <ProfilePhotoSection />
+              <Typography color="text.secondary" sx={{ mt: 1.5 }}>{data.designation} · {data.department}</Typography>
               <Divider sx={{ my: 2 }} />
               <Row label="Employee ID" value={data.employeeId} />
               <Row label="Email" value={data.userId.email} />

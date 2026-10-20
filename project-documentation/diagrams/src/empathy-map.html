@@ -1,0 +1,73 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Empathy map</title>
+<style>body{margin:0;background:#fff}</style>
+<script src="canvas-kit.js"></script></head>
+<body><script>
+// Empathy map canvas for StaffSync's three user roles. Assumption-based personas: no user research
+// is recorded in the project, so every statement is derived from the problems the features address.
+const ROLES = [
+  {
+    name: 'HR Administrator', colour: '#e8f0fe', accent: '#2f5fa8',
+    goal: 'Keep accurate people records and run attendance and leave for the whole company without chasing paperwork.',
+    need: ['Add people with roles and reporting lines', 'See company attendance and every leave request', 'Post announcements and organise training', 'Produce attendance and leave reports'],
+    hear: ['Employees asking whether their leave was approved', 'Managers asking who is in today', 'Requests for attendance figures at month end'],
+    pains: ['Records split across spreadsheets, email and paper', 'Attendance totals counted by hand', 'No single list of pending leave'],
+    gains: ['One place for people, attendance and leave', 'Reports calculated from the records', 'Control over who can see and change what'],
+    say: ['“I spend hours putting attendance together at month end.”', '“I can’t tell which requests are still waiting.”'],
+    do: ['Maintains spreadsheets', 'Forwards leave emails to managers', 'Sends notices by email'],
+  },
+  {
+    name: 'Manager', colour: '#eaf6ec', accent: '#3c7a46',
+    goal: 'Decide my team’s leave quickly and know who is working today.',
+    need: ['Review and decide team leave requests', 'See team attendance at a glance', 'Assign team members to training', 'Share updates with the team'],
+    hear: ['Team members asking about their requests', 'HR asking for overdue decisions', 'Clashes when two people are off together'],
+    pains: ['Requests arrive by email and chat and get missed', 'No view of overlapping leave', 'No quick view of today’s attendance'],
+    gains: ['A queue of pending team requests', 'Notification when a request arrives', 'A “team today” view'],
+    say: ['“I found a leave request in my inbox a week late.”', '“I don’t know who is in until I walk round.”'],
+    do: ['Replies to leave emails', 'Keeps personal notes of who is off', 'Passes HR notices on by hand'],
+  },
+  {
+    name: 'Employee', colour: '#fff4e2', accent: '#9a6b1f',
+    goal: 'Record my attendance and apply for leave easily, and know the outcome.',
+    need: ['Check in and check out', 'Apply for leave and follow its status', 'Read company announcements', 'Enrol in training'],
+    hear: ['Announcements second-hand from colleagues', 'Nothing back after asking for leave', 'Different answers from HR and the manager'],
+    pains: ['No confirmation that a request was received', 'No record of why leave was refused', 'Missed announcements and training'],
+    gains: ['Visible status: pending, approved, rejected with reason', 'A notification when a decision is made', 'My own attendance history'],
+    say: ['“I don’t know if my manager has even seen my request.”', '“I only heard about the training after it was full.”'],
+    do: ['Emails or messages the manager', 'Follows up in person', 'Keeps own record of days off'],
+  },
+];
+const W = 1860, colW = 590, gap = 25, x0 = 30, H = 1000;
+const c = makeCanvas(W, H, 'Empathy Map Canvas — StaffSync users', 'Assumption-based personas derived from StaffSync’s requirements and features; no user interviews are recorded in the project.');
+ROLES.forEach((r, i) => {
+  const x = x0 + i * (colW + gap);
+  c.box(x, 90, colW, 860, { fill: '#fbfcfe', stroke: r.accent });
+  c.add(c.el('rect', { x, y: 90, width: colW, height: 50, rx: 12, fill: r.accent }));
+  c.text(r.name, x + colW / 2, 122, { size: 20, weight: 700, color: '#fff', anchor: 'middle', maxWidth: colW });
+  let y = 168;
+  const section = (title, render, fill) => {
+    const top = y;
+    c.text(title, x + 18, y + 4, { size: 14, weight: 700, color: r.accent });
+    const end = render(y + 28);
+    c.add(c.el('line', { x1: x + 14, y1: end + 8, x2: x + colW - 14, y2: end + 8, stroke: '#dde2ea' }));
+    y = end + 26;
+    return top;
+  };
+  section('GOAL', (yy) => c.text(r.goal, x + 18, yy, { size: 14, maxWidth: colW - 36, italic: true }));
+  section('What do they need to DO?', (yy) => c.bullets(r.need, x + 18, yy, { maxWidth: colW - 36 }));
+  section('What do they HEAR?', (yy) => c.bullets(r.hear, x + 18, yy, { maxWidth: colW - 36 }));
+  section('What do they THINK and FEEL?', (yy) => {
+    const half = (colW - 52) / 2;
+    c.box(x + 18, yy - 6, half, 150, { fill: '#fdecef', stroke: '#e3a3ad', rx: 8 });
+    c.box(x + 34 + half, yy - 6, half, 150, { fill: '#eaf7e8', stroke: '#9fcf98', rx: 8 });
+    c.text('PAINS', x + 30, yy + 14, { size: 12, weight: 700, color: '#a33a4b' });
+    c.text('GAINS', x + 46 + half, yy + 14, { size: 12, weight: 700, color: '#3c7a46' });
+    c.bullets(r.pains, x + 30, yy + 36, { size: 12, maxWidth: half - 20, gap: 3 });
+    c.bullets(r.gains, x + 46 + half, yy + 36, { size: 12, maxWidth: half - 20, gap: 3 });
+    return yy + 150;
+  });
+  section('What do they SAY? (illustrative)', (yy) => c.bullets(r.say, x + 18, yy, { maxWidth: colW - 36, italic: true }));
+  section('What do they DO today?', (yy) => c.bullets(r.do, x + 18, yy, { maxWidth: colW - 36 }));
+});
+c.text('Quotes are illustrative statements written to express each persona’s needs. They are not recorded interviews.', 30, H - 18, { size: 12, color: '#555', maxWidth: 1800 });
+</script></body></html>

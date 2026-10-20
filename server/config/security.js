@@ -25,7 +25,8 @@ const pageSecurityHeaders = helmet({
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
-      imgSrc: ["'self'", 'data:'],
+      // blob: for profile photos, which the app fetches with the session token and shows from memory.
+      imgSrc: ["'self'", 'data:', 'blob:'],
       connectSrc: ["'self'"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],

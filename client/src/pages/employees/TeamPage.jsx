@@ -1,4 +1,5 @@
-import { Card, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
+import { Card, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
+import UserAvatar from '../../components/UserAvatar';
 import LoadState from '../../components/LoadState';
 import PageHeader from '../../components/PageHeader';
 import StatusChip from '../../components/StatusChip';
@@ -33,7 +34,12 @@ function TeamPage() {
                 {data?.map((e) => (
                   <TableRow key={e._id} hover>
                     <TableCell>{e.employeeId}</TableCell>
-                    <TableCell>{e.userId.name}<br /><small>{e.userId.email}</small></TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                        <UserAvatar userId={e.userId._id} name={e.userId.name} photoUpdatedAt={e.userId.photoUpdatedAt} size={34} />
+                        <span>{e.userId.name}<br /><small>{e.userId.email}</small></span>
+                      </Stack>
+                    </TableCell>
                     <TableCell>{e.designation}</TableCell>
                     <TableCell>{e.department}</TableCell>
                     <TableCell>{e.phone || '—'}</TableCell>

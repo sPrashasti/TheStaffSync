@@ -7,7 +7,7 @@ const { getPagination, buildPage } = require('../utils/pagination');
 const { DEMO_EMAIL_DOMAINS, isDemoAccount, isDemoEmail } = require('../services/demoService');
 
 // What other people may see of an account; never the password or internal fields.
-const USER_FIELDS = 'name email role isActive';
+const USER_FIELDS = 'name email role isActive photoUpdatedAt';
 const withUser = { path: 'userId', select: USER_FIELDS };
 const withManager = {
   path: 'managerId',

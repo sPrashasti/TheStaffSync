@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Leave approval sequence</title>
+<style>body{margin:0;background:#fff}</style></head>
+<body><script>
+// Sequence of PUT /api/leaves/:id/approve, from server/routes/leaveRoutes.js,
+// server/middleware/authMiddleware.js and decide() in server/controllers/leaveController.js.
+(function () {
+  const NS = 'http://www.w3.org/2000/svg';
+  const W = 1760, H = 1200, FONT = 'Segoe UI, Calibri, Arial, sans-serif';
+  const el = (t, a, txt) => { const e = document.createElementNS(NS, t); Object.entries(a).forEach(([k, v]) => e.setAttribute(k, v)); if (txt !== undefined) e.textContent = txt; return e; };
+  const svg = el('svg', { xmlns: NS, width: W, height: H, viewBox: `0 0 ${W} ${H}` });
+  svg.appendChild(el('rect', { x: 0, y: 0, width: W, height: H, fill: '#fff' }));
+  const defs = el('defs', {});
+  const m = el('marker', { id: 'a', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 8, markerHeight: 8, orient: 'auto' });
+  m.appendChild(el('path', { d: 'M0 0 L10 5 L0 10 z', fill: '#2f3b52' }));
+  defs.appendChild(m); svg.appendChild(defs);
+  svg.appendChild(el('text', { x: W / 2, y: 36, 'font-size': 24, 'font-weight': 700, 'text-anchor': 'middle', fill: '#1b2a41', 'font-family': FONT }, 'Sequence — a manager approves a leave request'));
+  svg.appendChild(el('text', { x: W / 2, y: 62, 'font-size': 14, 'text-anchor': 'middle', fill: '#555', 'font-family': FONT }, 'PUT /api/leaves/:id/approve — the same path serves HR, and rejection (with a required reason) differs only in the final status'));
+
+  const parts = [
+    ['Manager\n(browser)', 150], ['React app\n(leaveService, Axios)', 420], ['Express API\nmiddleware', 720],
+    ['Leave controller\ndecide()', 1020], ['Notification\nservice', 1300], ['MongoDB', 1600],
+  ];
+  const top = 100, bottom = 1140;
+  parts.forEach(([label, x]) => {
+    svg.appendChild(el('line', { x1: x, y1: top + 56, x2: x, y2: bottom, stroke: '#9aa7bd', 'stroke-dasharray': '6 5', 'stroke-width': 1.5 }));
+    svg.appendChild(el('rect', { x: x - 115, y: top, width: 230, height: 56, rx: 8, fill: '#eef1f6', stroke: '#3d4a63', 'stroke-width': 1.8 }));
+    label.split('\n').forEach((line, i, arr) => svg.appendChild(el('text', { x, y: top + 28 + (i - (arr.length - 1) / 2) * 17, 'font-size': 14, 'font-weight': i === 0 ? 700 : 400, 'text-anchor': 'middle', 'dominant-baseline': 'middle', fill: '#1b2a41', 'font-family': FONT }, line)));
+  });
+  const X = Object.fromEntries(parts.map(([l, x], i) => [i, x]));
+  let y = 200;
+  const msg = (from, to, text, { dashed = false, step = 56, note } = {}) => {
+    const x1 = X[from], x2 = X[to];
+    if (from === to) {
+      svg.appendChild(el('path', { d: `M${x1} ${y} h60 v24 h-58`, fill: 'none', stroke: '#2f3b52', 'stroke-width': 1.6, 'marker-end': 'url(#a)' }));
+      text.split('\n').forEach((line, i) => svg.appendChild(el('text', { x: x1 + 72, y: y + 6 + i * 16, 'font-size': 13, fill: '#1d2b45', 'font-family': FONT }, line)));
+    } else {
+      svg.appendChild(el('line', { x1, y1: y, x2: x2 + (x2 > x1 ? -2 : 2), y2: y, stroke: '#2f3b52', 'stroke-width': 1.6, 'marker-end': 'url(#a)', 'stroke-dasharray': dashed ? '6 4' : 'none' }));
+      const lines = text.split('\n');
+      lines.forEach((line, i) => svg.appendChild(el('text', { x: (x1 + x2) / 2, y: y - 8 - (lines.length - 1 - i) * 16, 'font-size': 13, 'text-anchor': 'middle', fill: '#1d2b45', 'font-family': FONT }, line)));
+    }
+    if (note) {
+      svg.appendChild(el('rect', { x: note.x, y: y + 12, width: note.w, height: 22 + (note.text.split('\n').length - 1) * 16, rx: 4, fill: '#fff6e5', stroke: '#e0b45c' }));
+      note.text.split('\n').forEach((line, i) => svg.appendChild(el('text', { x: note.x + 8, y: y + 28 + i * 16, 'font-size': 12, fill: '#6b4a0b', 'font-family': FONT }, line)));
+    }
+    y += step;
+  };
+  msg(0, 1, 'Clicks Approve on a team request');
+  msg(1, 2, 'PUT /api/leaves/:id/approve\nAuthorization: Bearer <JWT>', { step: 64 });
+  msg(2, 2, 'protect: verify JWT (HS256, scope org),\nload user + employee + organisation in one aggregation;\nrefuse if deactivated, password changed or organisation suspended', { step: 84 });
+  msg(2, 5, 'aggregate users ⋈ employees ⋈ organisations', { step: 40 });
+  msg(5, 2, 'user, employee, organisation', { dashed: true, step: 50 });
+  msg(2, 2, 'authorize(\'manager\', \'hr\') → else 403\nvalidateObjectId, approveLeaveRules → else 400/404', { step: 70 });
+  msg(2, 3, 'next() inside the organisation context', { step: 50 });
+  msg(3, 5, 'loadLeave(id): leave + applicant (scoped by organisationId)', { step: 40 });
+  msg(5, 3, 'leave, applicant', { dashed: true, step: 50 });
+  msg(3, 3, 'assertCanDecide: decider is HR, or the applicant’s direct manager;\nnever the applicant themself → else 403', { step: 70 });
+  msg(3, 5, 'findOneAndUpdate({ _id, status: \'pending\' },\n{ status: \'approved\', approvedBy: manager })', { step: 40 });
+  msg(5, 3, 'updated leave (or null)', { dashed: true, step: 92,
+    note: { x: 1080, w: 430, text: 'Atomic: only one decision can succeed. If the request is\nno longer pending, the result is null → 409 "already approved"' } });
+  msg(3, 4, 'leaveDecided({ leave, applicant, deciderName })', { step: 40 });
+  msg(4, 5, 'insert notification for the applicant', { step: 40 });
+  msg(5, 4, 'ok', { dashed: true, step: 50 });
+  msg(3, 2, '200 { success: true, message: "Leave approved", data }', { dashed: true, step: 46 });
+  msg(2, 1, 'JSON response', { dashed: true, step: 46 });
+  msg(1, 0, '"Leave approved"; the list refreshes from the API', { dashed: true, step: 46 });
+  svg.appendChild(el('text', { x: 40, y: H - 22, 'font-size': 12, fill: '#555', 'font-family': FONT }, 'Errors at any step go to the central error handler and return { success: false, message }. Sources: routes/leaveRoutes.js, middleware/authMiddleware.js, controllers/leaveController.js, services/notificationService.js.'));
+  document.body.appendChild(svg);
+})();
+</script></body></html>
