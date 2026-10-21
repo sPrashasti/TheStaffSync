@@ -33,6 +33,7 @@ services:
       # Set these in the dashboard when Render asks (they are secrets or depend on your accounts).
       - key: MONGO_URI
         sync: false
+      # Render Free blocks outbound SMTP ports 25, 465 and 587: use port 2525 (supported by Brevo).
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
