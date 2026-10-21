@@ -16,7 +16,7 @@ Time needed: about 20 minutes the first time.
 1. **Use a separate database for production.** Copy your connection string and change the database name after `.mongodb.net/`, so production data never mixes with development and test data:
 
    ```
-   mongodb+srv://<user>:<password>@cluster0.ehf3ymx.mongodb.net/staffsync?retryWrites=true&w=majority&appName=Cluster0
+   mongodb+srv://<user>:<password>@<your-cluster>.mongodb.net/staffsync?retryWrites=true&w=majority&appName=Cluster0
    ```
 
 2. **Database Access:** use a database user with *Read and write to any database*. A dedicated production user with its own password is better than reusing the development one.
@@ -50,7 +50,7 @@ Production starts empty. Run the seed script **from your computer**, pointed at 
 
 ```powershell
 cd server
-$env:MONGO_URI = "mongodb+srv://<user>:<password>@cluster0.ehf3ymx.mongodb.net/staffsync?retryWrites=true&w=majority"
+$env:MONGO_URI = "mongodb+srv://<user>:<password>@<your-cluster>.mongodb.net/staffsync?retryWrites=true&w=majority"
 $env:SEED_HR_NAME = "Your Name"
 $env:SEED_HR_EMAIL = "you@mts.example"
 $env:SEED_HR_PASSWORD = "<a strong password>"
